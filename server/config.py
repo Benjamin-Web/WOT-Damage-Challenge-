@@ -1,17 +1,11 @@
-# ─── Event-Konfiguration — VOR JEDEM EVENT ANPASSEN ───────────────────────────
+# ─── Event-Konfiguration ──────────────────────────────────────────────────────
 
-# Server-Port (auf dem Server-PC)
-PORT = 5000
-
-# Start-Schadensziel fuer das Event
+PORT         = 5000
 INITIAL_GOAL = 100000
 
-# Exakte WoT-Account-Namen der teilnehmenden Streamer (case-sensitiv!)
-STREAMER_NAMES = [
-    'Streamer1_WoT',
-    'Streamer2_WoT',
-    'Streamer3_WoT',
-]
+# Streamer-Namen werden auch live im Admin-Panel verwaltet.
+# Diese Liste wird beim Serverstart als Startwert geladen.
+STREAMER_NAMES = []
 
-# Admin-Passwort fuer Reset/Pause (leer lassen = kein Schutz)
+# Admin-Passwort (leer lassen = kein Schutz)
 ADMIN_SECRET = 'changeme123'
