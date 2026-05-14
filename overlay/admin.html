@@ -8,203 +8,379 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:     #0d1117;
-      --bg2:    #161b22;
-      --bdr:    #30363d;
-      --accent: #ffe033;
-      --green:  #3fb950;
-      --red:    #f85149;
-      --white:  #e6edf3;
-      --gray:   #8b949e;
+      --bg:      #0d1117;
+      --bg2:     #161b22;
+      --bg3:     #1c2128;
+      --bdr:     #30363d;
+      --accent:  #ffe033;
+      --green:   #3fb950;
+      --red:     #f85149;
+      --orange:  #d29922;
+      --white:   #e6edf3;
+      --gray:    #8b949e;
+      --radius:  8px;
     }
 
-    body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg);
-           color: var(--white); min-height: 100vh; }
+    body {
+      background: var(--bg);
+      color: var(--white);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
 
-    /* ── Layout ── */
-    .header { background: var(--bg2); border-bottom: 1px solid var(--bdr);
-               padding: 16px 28px; display: flex; align-items: center; gap: 16px; }
-    .header h1 { font-size: 20px; color: var(--accent); }
-    .header .sub { font-size: 13px; color: var(--gray); margin-left: auto; }
+    /* ── Topbar ── */
+    .topbar {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--bdr);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .topbar-logo { font-size: 22px; }
+    .topbar-brand { font-size: 17px; font-weight: 800; color: var(--accent); }
+    .topbar-sub { font-size: 12px; color: var(--gray); }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .dot-live {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .live-label { font-size: 12px; color: var(--green); font-weight: 600; }
 
-    .main { display: grid; grid-template-columns: 1fr 340px;
-            gap: 20px; padding: 24px 28px; max-width: 1100px; margin: 0 auto; }
-
-    @media (max-width: 700px) { .main { grid-template-columns: 1fr; } }
-
-    /* ── Cards ── */
-    .card { background: var(--bg2); border: 1px solid var(--bdr);
-            border-radius: 8px; overflow: hidden; }
-    .card-head { padding: 12px 16px; background: var(--bg);
-                 border-bottom: 1px solid var(--bdr);
-                 font-size: 12px; font-weight: bold; color: var(--gray);
-                 text-transform: uppercase; letter-spacing: 1px; }
-    .card-body { padding: 16px; }
-
-    /* ── Stats ── */
-    .stats { display: grid; grid-template-columns: repeat(3, 1fr);
-             gap: 12px; margin-bottom: 20px; }
-    .stat { background: var(--bg2); border: 1px solid var(--bdr);
-            border-radius: 8px; padding: 16px; text-align: center; }
-    .stat .label { font-size: 11px; color: var(--gray); text-transform: uppercase;
-                   letter-spacing: 1px; }
-    .stat .val { font-size: 32px; font-weight: 900; margin-top: 4px; }
-    .stat.remaining .val { color: var(--accent); }
-    .stat.dealt     .val { color: var(--green); }
-
-    /* ── Progress ── */
-    .progress-wrap { background: var(--bg); border-radius: 4px;
-                     height: 8px; margin: 0 0 20px; overflow: hidden; }
-    .progress-bar  { background: var(--accent); height: 100%;
-                     transition: width 0.4s ease; border-radius: 4px; }
-
-    /* ── Table ── */
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { padding: 8px 12px; text-align: left; font-size: 11px;
-         text-transform: uppercase; letter-spacing: 1px; color: var(--gray);
-         border-bottom: 1px solid var(--bdr); }
-    td { padding: 10px 12px; border-bottom: 1px solid var(--bg);
-         vertical-align: middle; }
-    tr:last-child td { border-bottom: none; }
-    .online  { color: var(--green); font-weight: bold; }
-    .offline { color: var(--gray); }
-    .inactive { opacity: 0.4; font-style: italic; }
-
-    /* ── Buttons ── */
-    button { border: none; border-radius: 6px; cursor: pointer;
-             font-family: inherit; font-weight: bold; transition: opacity 0.15s; }
-    button:hover { opacity: 0.82; }
-    .btn        { padding: 8px 18px; font-size: 13px; }
-    .btn-accent { background: var(--accent); color: #0d1117; }
-    .btn-danger { background: var(--red);    color: #fff; }
-    .btn-ghost  { background: var(--bg);     color: var(--white);
-                  border: 1px solid var(--bdr); }
-    .btn-sm     { padding: 4px 10px; font-size: 12px; }
-
-    /* ── Form ── */
-    input[type="text"], input[type="number"], input[type="password"] {
-      background: var(--bg); border: 1px solid var(--bdr); color: var(--white);
-      padding: 8px 12px; border-radius: 6px; font-family: inherit;
-      font-size: 13px; width: 100%; outline: none; }
-    input:focus { border-color: var(--accent); }
-    .field { margin-bottom: 12px; }
-    .field label { display: block; font-size: 11px; color: var(--gray);
-                   text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-
-    /* ── Log ── */
-    .log { font-size: 12px; font-family: monospace; max-height: 260px;
-           overflow-y: auto; }
-    .log-entry { padding: 5px 0; border-bottom: 1px solid var(--bg);
-                 display: flex; gap: 8px; }
-    .log-entry:last-child { border-bottom: none; }
-    .log-t   { color: var(--gray); min-width: 54px; }
-    .log-who { font-weight: bold; min-width: 120px; }
-    .log-dmg { color: var(--green); }
-    .log-rem { color: var(--accent); margin-left: auto; }
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--bdr);
+      color: var(--gray);
+      border-radius: 6px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-logout:hover { border-color: var(--red); color: var(--red); }
 
     /* ── Paused banner ── */
-    .paused-banner { display: none; background: var(--red); color: #fff;
-                     padding: 10px 28px; font-weight: bold; font-size: 14px;
-                     text-align: center; }
+    .paused-banner {
+      display: none;
+      background: linear-gradient(90deg, #c0392b, #e74c3c);
+      color: #fff;
+      text-align: center;
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 2px;
+      padding: 10px;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 20px;
+      padding: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--bdr);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .card:last-child { margin-bottom: 0; }
+    .card-head {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--bdr);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--gray);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-body { padding: 18px; }
+
+    /* ── Stats ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat {
+      background: var(--bg2);
+      border: 1px solid var(--bdr);
+      border-radius: var(--radius);
+      padding: 18px 16px;
+      text-align: center;
+    }
+    .stat .s-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--gray);
+    }
+    .stat .s-val {
+      font-size: 30px;
+      font-weight: 900;
+      margin-top: 6px;
+      line-height: 1;
+    }
+    .stat.s-rem  .s-val { color: var(--accent); }
+    .stat.s-done .s-val { color: var(--green); }
+
+    /* ── Progress ── */
+    .prog-wrap {
+      background: var(--bg3);
+      border-radius: 6px;
+      height: 10px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .prog-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #ffb700);
+      border-radius: 6px;
+      transition: width .5s ease;
+    }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      padding: 8px 14px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--gray);
+      border-bottom: 1px solid var(--bdr);
+      text-align: left;
+    }
+    td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--bg3);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--bg3); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-online  { background: rgba(63,185,80,.15); color: var(--green); }
+    .badge-offline { background: rgba(139,148,158,.1); color: var(--gray); }
+    .badge-inactive{ background: rgba(139,148,158,.05); color: var(--gray);
+                     font-style: italic; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 18px;
+      border: none;
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      text-decoration: none;
+    }
+    .btn:active { transform: scale(.97); }
+    .btn:hover  { opacity: .85; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-danger  { background: rgba(248,81,73,.15); color: var(--red);
+                   border: 1px solid rgba(248,81,73,.3); }
+    .btn-ghost   { background: var(--bg3); color: var(--white);
+                   border: 1px solid var(--bdr); }
+    .btn-pause   { background: rgba(210,153,34,.15); color: var(--orange);
+                   border: 1px solid rgba(210,153,34,.3); }
+    .btn-resume  { background: rgba(63,185,80,.15); color: var(--green);
+                   border: 1px solid rgba(63,185,80,.3); }
+    .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 6px; }
+    .btn-full { width: 100%; justify-content: center; }
+
+    /* ── Inputs ── */
+    .field { margin-bottom: 12px; }
+    .field label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--gray);
+      margin-bottom: 6px;
+    }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--bdr);
+      border-radius: var(--radius);
+      color: var(--white);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 9px 12px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus { border-color: var(--accent); }
+
+    /* ── Log ── */
+    .log {
+      font-family: 'Consolas', 'SF Mono', monospace;
+      font-size: 12px;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .log::-webkit-scrollbar { width: 4px; }
+    .log::-webkit-scrollbar-thumb { background: var(--bdr); border-radius: 2px; }
+    .log-row {
+      display: grid;
+      grid-template-columns: 54px 1fr auto auto;
+      gap: 8px;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--bg3);
+      align-items: center;
+    }
+    .log-row:last-child { border-bottom: none; }
+    .lt  { color: var(--gray); }
+    .lwho{ font-weight: 700; }
+    .ldmg{ color: var(--green); }
+    .lrem{ color: var(--accent); text-align: right; }
+
+    .hint { font-size: 11px; color: var(--gray); margin-top: 10px; line-height: 1.5; }
+
+    /* ── Divider ── */
+    .divider { height: 1px; background: var(--bdr); margin: 12px 0; }
   </style>
 </head>
 <body>
 
 <div class="paused-banner" id="paused-banner">⏸  EVENT PAUSIERT</div>
 
-<div class="header">
-  <span>🐾</span>
-  <h1>BeastSync Admin</h1>
-  <span class="sub" id="hdr-sub">–</span>
+<div class="topbar">
+  <span class="topbar-logo">🐾</span>
+  <div>
+    <div class="topbar-brand">BeastSync</div>
+    <div class="topbar-sub" id="top-sub">Admin-Panel</div>
+  </div>
+  <div class="topbar-right">
+    <div class="dot-live"></div>
+    <span class="live-label">LIVE</span>
+    <button class="btn-logout" onclick="logout()">Abmelden</button>
+  </div>
 </div>
 
-<div class="main">
+<div class="layout">
+
   <!-- Linke Spalte -->
   <div>
+
     <!-- Stats -->
     <div class="stats">
-      <div class="stat remaining">
-        <div class="label">Restdamage</div>
-        <div class="val" id="s-rem">–</div>
+      <div class="stat s-rem">
+        <div class="s-label">Restdamage</div>
+        <div class="s-val" id="s-rem">–</div>
       </div>
-      <div class="stat dealt">
-        <div class="label">Dealt gesamt</div>
-        <div class="val" id="s-dealt">–</div>
+      <div class="stat s-done">
+        <div class="s-label">Dealt gesamt</div>
+        <div class="s-val" id="s-dealt">–</div>
       </div>
       <div class="stat">
-        <div class="label">Ziel</div>
-        <div class="val" id="s-goal">–</div>
+        <div class="s-label">Ziel</div>
+        <div class="s-val" id="s-goal">–</div>
       </div>
     </div>
-    <div class="progress-wrap"><div class="progress-bar" id="pbar" style="width:0%"></div></div>
+    <div class="prog-wrap"><div class="prog-bar" id="pbar" style="width:0%"></div></div>
 
-    <!-- Streamer-Tabelle -->
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-head">Streamer</div>
-      <div class="card-body" style="padding:0">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Damage</th>
-              <th>Zuletzt</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="streamer-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Event-Log -->
+    <!-- Streamer -->
     <div class="card">
-      <div class="card-head">Live-Log (letzte Treffer)</div>
+      <div class="card-head">👥 Streamer</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Damage</th>
+            <th>Zuletzt</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="streamer-tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- Log -->
+    <div class="card">
+      <div class="card-head">📋 Live-Log</div>
       <div class="card-body">
         <div class="log" id="log"></div>
       </div>
     </div>
+
   </div>
 
   <!-- Rechte Spalte -->
-  <div style="display:flex;flex-direction:column;gap:16px">
+  <div>
 
-    <!-- Streamer hinzufuegen -->
+    <!-- Streamer hinzufügen -->
     <div class="card">
-      <div class="card-head">Streamer hinzufügen</div>
+      <div class="card-head">➕ Streamer hinzufügen</div>
       <div class="card-body">
         <div class="field">
           <label>WoT-Account-Name</label>
-          <input type="text" id="add-name" placeholder="z.B. Mohjo_beist">
+          <input type="text" id="add-name" placeholder="z.B. Mohjo_beist"
+                 onkeydown="if(event.key==='Enter') addStreamer()">
         </div>
-        <button class="btn btn-accent" style="width:100%" onclick="addStreamer()">
+        <button class="btn btn-primary btn-full" onclick="addStreamer()">
           + Hinzufügen
         </button>
-        <p style="font-size:11px;color:var(--gray);margin-top:8px">
-          Nicht eingetragene Streamer werden beim ersten Damage automatisch registriert.
+        <p class="hint">
+          Unbekannte Streamer werden beim ersten Damage automatisch registriert.
         </p>
       </div>
     </div>
 
-    <!-- Event-Controls -->
+    <!-- Event steuern -->
     <div class="card">
-      <div class="card-head">Event steuern</div>
+      <div class="card-head">⚙️ Event steuern</div>
       <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
-        <div class="field">
+        <div class="field" style="margin-bottom:0">
           <label>Schaden-Ziel</label>
           <input type="number" id="goal-input" placeholder="z.B. 100000" min="1">
         </div>
-        <button class="btn btn-accent" onclick="setGoal()">Ziel setzen</button>
-        <button class="btn btn-ghost" id="btn-pause" onclick="togglePause()">⏸  Pause</button>
-        <button class="btn btn-danger" onclick="doReset()">↺  Reset (Daten löschen)</button>
-      </div>
-    </div>
-
-    <!-- Auth -->
-    <div class="card">
-      <div class="card-head">Admin-Passwort</div>
-      <div class="card-body">
-        <input type="password" id="secret" placeholder="Passwort eingeben">
+        <button class="btn btn-ghost btn-full" onclick="setGoal()">
+          Ziel setzen
+        </button>
+        <div class="divider"></div>
+        <button class="btn btn-pause btn-full" id="btn-pause" onclick="togglePause()">
+          ⏸  Pause
+        </button>
+        <button class="btn btn-danger btn-full" onclick="doReset()">
+          ↺  Reset — Daten löschen
+        </button>
       </div>
     </div>
 
@@ -212,10 +388,8 @@
 </div>
 
 <script>
-  const POLL = 2000;
   let paused = false;
-
-  const fmt = n => Math.max(0, Math.round(n)).toLocaleString('de-DE');
+  const fmt  = n => Math.max(0, Math.round(n)).toLocaleString('de-DE');
 
   function timeSince(iso) {
     if (!iso) return '—';
@@ -225,120 +399,138 @@
     return Math.round(s / 60) + 'min';
   }
 
-  function secret() { return document.getElementById('secret').value; }
-
-  async function fetchStatus() {
+  async function poll() {
     try {
       const d = await (await fetch('/status')).json();
       render(d);
-    } catch (e) {}
+    } catch (_) {}
   }
 
   function render(d) {
     paused = d.paused;
+
     document.getElementById('s-rem').textContent   = fmt(d.remaining);
     document.getElementById('s-dealt').textContent = fmt(d.total_dealt);
     document.getElementById('s-goal').textContent  = fmt(d.goal);
-    document.getElementById('hdr-sub').textContent =
-      `${fmt(d.total_dealt)} / ${fmt(d.goal)} Damage`;
+    document.getElementById('top-sub').textContent =
+      fmt(d.total_dealt) + ' / ' + fmt(d.goal) + ' Damage';
     document.getElementById('paused-banner').style.display = paused ? 'block' : 'none';
-    document.getElementById('pbar').style.width =
-      Math.min(100, d.goal > 0 ? d.total_dealt / d.goal * 100 : 0) + '%';
 
-    const btn = document.getElementById('btn-pause');
-    btn.textContent = paused ? '▶  Fortsetzen' : '⏸  Pause';
-    btn.className   = paused ? 'btn btn-ghost' : 'btn btn-ghost';
+    const pct = d.goal > 0 ? Math.min(100, d.total_dealt / d.goal * 100) : 0;
+    document.getElementById('pbar').style.width = pct + '%';
+
+    const bp = document.getElementById('btn-pause');
+    bp.className = 'btn btn-full ' + (paused ? 'btn-resume' : 'btn-pause');
+    bp.textContent = paused ? '▶  Fortsetzen' : '⏸  Pause';
 
     // Streamer-Tabelle
     const tbody = document.getElementById('streamer-tbody');
     tbody.innerHTML = '';
-    for (const [name, info] of Object.entries(d.streamers)) {
-      const active  = info.active !== false;
-      const age     = info.last_seen
+    const entries = Object.entries(d.streamers);
+    entries.sort((a,b) => b[1].damage - a[1].damage);
+
+    for (const [name, info] of entries) {
+      const active = info.active !== false;
+      const age    = info.last_seen
         ? (Date.now() - new Date(info.last_seen).getTime()) / 1000 : Infinity;
-      const online  = active && age < 90;
+      const online = active && age < 90;
+
+      let badgeCls = online ? 'badge-online' : (active ? 'badge-offline' : 'badge-inactive');
+      let badgeTxt = online ? '● Online'      : (active ? '○ Offline'    : '— Inaktiv');
+
       const tr = document.createElement('tr');
-      if (!active) tr.className = 'inactive';
       tr.innerHTML = `
-        <td>${name}</td>
+        <td style="font-weight:700">${name}</td>
         <td>${fmt(info.damage)}</td>
-        <td>${timeSince(info.last_seen)}</td>
-        <td class="${online ? 'online' : 'offline'}">${online ? '● Online' : '○ Offline'}</td>
+        <td style="color:var(--gray)">${timeSince(info.last_seen)}</td>
+        <td><span class="badge ${badgeCls}">${badgeTxt}</span></td>
         <td>
           ${active
             ? `<button class="btn btn-sm btn-danger" onclick="removeStreamer('${name}')">✕</button>`
-            : `<button class="btn btn-sm btn-ghost" onclick="readdStreamer('${name}')">+</button>`}
+            : `<button class="btn btn-sm btn-ghost"  onclick="readdStreamer('${name}')">+</button>`}
         </td>`;
       tbody.appendChild(tr);
     }
 
+    if (!entries.length) {
+      tbody.innerHTML =
+        '<tr><td colspan="5" style="color:var(--gray);text-align:center;padding:20px">'+
+        'Noch keine Streamer.</td></tr>';
+    }
+
     // Log
-    const logEl = document.getElementById('log');
-    const entries = (d.event_log || []).slice().reverse();
-    logEl.innerHTML = entries.length
-      ? entries.map(e => `
-          <div class="log-entry">
-            <span class="log-t">${e.t}</span>
-            <span class="log-who">${e.streamer}</span>
-            <span class="log-dmg">+${fmt(e.damage)}</span>
-            <span class="log-rem">${fmt(e.remaining)}</span>
+    const logEl   = document.getElementById('log');
+    const entries2 = (d.event_log || []).slice().reverse();
+    logEl.innerHTML = entries2.length
+      ? entries2.map(e => `
+          <div class="log-row">
+            <span class="lt">${e.t}</span>
+            <span class="lwho">${e.streamer}</span>
+            <span class="ldmg">+${fmt(e.damage)}</span>
+            <span class="lrem">${fmt(e.remaining)}</span>
           </div>`).join('')
-      : '<div style="color:var(--gray)">Noch keine Einträge.</div>';
+      : '<div style="color:var(--gray);padding:8px 0">Noch keine Einträge.</div>';
   }
 
   async function post(path, body) {
-    try {
-      const r = await fetch(path, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({...body, secret: secret()}),
-      });
-      return r.json();
-    } catch (e) { alert('Netzwerkfehler: ' + e); }
+    const r = await fetch(path, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (r.status === 401 || r.status === 403) {
+      window.location.href = '/login';
+      return null;
+    }
+    return r.json();
   }
 
   async function addStreamer() {
     const name = document.getElementById('add-name').value.trim();
-    if (!name) { alert('Bitte einen Namen eingeben.'); return; }
+    if (!name) return;
     const r = await post('/admin/streamers', {action: 'add', name});
-    if (r?.ok) { document.getElementById('add-name').value = ''; fetchStatus(); }
-    else alert('Fehler: ' + (r?.error || '?'));
+    if (r?.ok) { document.getElementById('add-name').value = ''; poll(); }
+    else if (r) alert(r.error);
   }
 
   async function removeStreamer(name) {
-    if (!confirm(`"${name}" aus dem Event entfernen?`)) return;
+    if (!confirm(`"${name}" deaktivieren?`)) return;
     const r = await post('/admin/streamers', {action: 'remove', name});
-    if (r?.ok) fetchStatus();
-    else alert('Fehler: ' + (r?.error || '?'));
+    if (r?.ok) poll();
   }
 
   async function readdStreamer(name) {
     const r = await post('/admin/streamers', {action: 'add', name});
-    if (r?.ok) fetchStatus();
-    else alert('Fehler: ' + (r?.error || '?'));
+    if (r?.ok) poll();
   }
 
   async function setGoal() {
     const goal = parseInt(document.getElementById('goal-input').value);
     if (!goal || goal <= 0) { alert('Bitte ein gültiges Ziel eingeben.'); return; }
-    const r = await post('/admin/set', {goal});
-    if (r?.ok) fetchStatus(); else alert('Fehler: ' + r?.error);
+    await post('/admin/set', {goal});
+    poll();
   }
 
   async function doReset() {
     if (!confirm('Wirklich alle Damage-Daten zurücksetzen?')) return;
     const goal = parseInt(document.getElementById('goal-input').value) || null;
-    const r = await post('/admin/set', {reset: true, goal});
-    if (r?.ok) fetchStatus(); else alert('Fehler: ' + r?.error);
+    await post('/admin/set', {reset: true, goal});
+    poll();
   }
 
   async function togglePause() {
-    const r = await post('/admin/pause', {paused: !paused});
-    if (r?.ok) fetchStatus(); else alert('Fehler: ' + r?.error);
+    await post('/admin/pause', {paused: !paused});
+    poll();
   }
 
-  fetchStatus();
-  setInterval(fetchStatus, POLL);
+  async function logout() {
+    await fetch('/logout', {credentials: 'include'});
+    window.location.href = '/login';
+  }
+
+  poll();
+  setInterval(poll, 2000);
 </script>
 </body>
 </html>

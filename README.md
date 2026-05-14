@@ -17,19 +17,9 @@ Der Damage-Counter läuft von da an von selbst.
 
 ## Was ist BeastSync?
 
-BeastSync ist ein von **Mohjo_beist** entwickelter World of Tanks Mod und Server für Community Damage-Challenges. Mehrere Streamer spielen gleichzeitig und arbeiten gemeinsam auf ein Schadensziel hin. Der Counter läuft automatisch — live, für alle sichtbar im OBS-Overlay.
+BeastSync ist ein von **Mohjo_beist** entwickelter World of Tanks Mod für Community Damage-Challenges. Mehrere Streamer spielen gleichzeitig und arbeiten gemeinsam auf ein Schadensziel hin. Der Counter läuft automatisch — live, für alle sichtbar im OBS-Overlay.
 
-Der Mod läuft über unseren eigenen Server. Streamer müssen nichts einrichten außer der Installer-Exe.
-
----
-
-## Wer macht was?
-
-| | Mohjo_beist (Veranstalter) | Streamer |
-|---|---|---|
-| **Einmalig** | — | `DamageChallenge-Install.exe` ausführen |
-| **Pro Event** | Ziel + Streamer im Admin-Panel setzen | WoT starten und spielen |
-| **Während Event** | Counter im Admin-Panel beobachten | Spielen |
+Alles läuft über unseren eigenen Server. Streamer müssen nichts einrichten außer der Installer-Exe.
 
 ---
 
@@ -45,11 +35,11 @@ Der Mod läuft über unseren eigenen Server. Streamer müssen nichts einrichten 
 
 **4.** WoT neu starten — fertig ✅
 
-Der Installer erkennt World of Tanks automatisch und verbindet sich mit unserem Server. Du musst nichts weiter wissen oder installieren.
+Der Installer erkennt World of Tanks automatisch und verbindet sich mit dem BeastSync-Server. Kein Python, kein Config-File, nichts weiter nötig.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  🐾 BeastSync Setup — Mohjo_beist BeastSync         │
+│  🐾 BeastSync Setup                                 │
 │─────────────────────────────────────────────────────│
 │                                                     │
 │  Dein World of Tanks Account-Name                   │
@@ -58,7 +48,6 @@ Der Installer erkennt World of Tanks automatisch und verbindet sich mit unserem 
 │  └───────────────────────────────────────────────┘  │
 │  ⚠  Groß-/Kleinschreibung beachten!                 │
 │                                                     │
-│  ─────────────────────────────────────────────────  │
 │  ✅  WoT gefunden (Version 1.24.1.0)                │
 │                                                     │
 │                        [Jetzt installieren  →]      │
@@ -67,89 +56,41 @@ Der Installer erkennt World of Tanks automatisch und verbindet sich mit unserem 
 
 ---
 
-## 🖥️ Für Mohjo_beist — Server & Admin
+## 🎛️ Für Mohjo_beist — Admin-Zugang
 
-### Server
+Das Admin-Panel ist passwortgeschützt und läuft komplett im Browser. Kein lokales Programm nötig — auch vom Handy oder Tablet aus bedienbar.
 
-Der BeastSync-Server läuft auf unserem VPS und ist dauerhaft erreichbar.
+**Admin-Panel:** Wird privat kommuniziert.
 
-```bash
-# Auf dem Server (einmalig einrichten):
-git clone https://github.com/Benjamin-Web/WOT-Damage-Challenge-.git
-cd WOT-Damage-Challenge-
-docker compose up -d
-```
-
-Admin-Panel: `http://109.123.244.109:5000/admin`
-OBS-Overlay: `http://109.123.244.109:5000/overlay`
-
-### Exe neu bauen (nach Änderungen)
-
-```bash
-python2.7 mod/build_wotmod.py   # WoT-Mod kompilieren
-python build_exe.py             # Installer-Exe bauen
-```
-
-Die fertige `DamageChallenge-Install.exe` liegt danach in `dist/`.
+Funktionen im Admin-Panel:
+- Schadensziel setzen und zurücksetzen
+- Streamer live hinzufügen oder entfernen
+- Pause / Fortsetzen
+- Live-Log aller Treffer
 
 ---
 
-## 📺 OBS-Overlay einrichten
+## 📺 OBS-Overlay
 
-**In OBS bei jedem Streamer:**
+Die OBS-URL wird von Mohjo_beist vor dem Event an alle Streamer kommuniziert.
+
+**In OBS:**
 1. Quelle hinzufügen → **Browser**
-2. URL: `http://109.123.244.109:5000/overlay`
+2. URL einfügen (vom Veranstalter)
 3. Breite `300` · Höhe `80`
 4. Custom CSS: `body { background: transparent !important; }`
-
-```
-┌────────────────────────┐
-│ RESTDAMAGE             │
-│ 87.543                 │
-└────────────────────────┘
-```
-
----
-
-## 🎛️ Admin-Panel
-
-Unter `http://109.123.244.109:5000/admin` erreichbar (auch vom Handy).
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│  🐾 BeastSync Admin                   87.543 / 100.000 Damage   │
-│──────────────────────────────────────────────────────────────────│
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │ RESTDAMAGE  │  │    DEALT    │  │    ZIEL     │             │
-│  │   12.457    │  │   87.543    │  │   100.000   │             │
-│  └─────────────┘  └─────────────┘  └─────────────┘             │
-│  ████████████████████████░░░░░░░░░░░░░  87,5%                   │
-│──────────────────────────────────────────────────────────────────│
-│  Name            Damage    Zuletzt    Status                     │
-│  Mohjo_beist     45.230    2s         ● Online                   │
-│  Streamer2       28.100    18s        ● Online                   │
-│  Streamer3       14.213    4min       ○ Offline                  │
-│──────────────────────────────────────────────────────────────────│
-│  [Streamer hinzufügen]  [Pause]  [Reset]  [Ziel setzen]         │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-- Streamer live hinzufügen oder entfernen — kein Serverneustart nötig
-- Unbekannte Streamer werden beim ersten Damage automatisch registriert
-- Pause, Reset, Ziel ändern per Klick
 
 ---
 
 ## 🏗️ Architektur
 
 ```
-  VPS (109.123.244.109)
+  BeastSync Server (privat gehostet)
   ┌────────────────────────────────────────┐
-  │  BeastSync Server (Flask, Port 5000)  │
   │                                        │
   │  GET /status   ◄── OBS Browser Source │◄──── alle Streamer-OBS
   │  POST /damage  ◄── WoT-Mod (je PC)    │
-  │  GET /admin    ◄── Mohjo_beist        │
+  │  GET /admin    ◄── Mohjo_beist (Login)│
   └────────────────────────────────────────┘
           ▲                    ▲
   ┌───────────────┐    ┌───────────────┐
@@ -176,10 +117,9 @@ Unter `http://109.123.244.109:5000/admin` erreichbar (auch vom Handy).
 
 ```
 WOT-Damage-Challenge-/
-├── installer_config.json        ← Server-URL (fest eingetragen)
+├── installer_config.json        ← Server-Verbindung (privat)
 ├── installer_gui.py             ← Streamer-Installer
-├── server_gui.py                ← Server-GUI
-├── build_exe.py                 ← Baut .exe Dateien
+├── build_exe.py                 ← Baut Installer.exe
 ├── Dockerfile / docker-compose.yml
 │
 ├── mod/
@@ -191,7 +131,8 @@ WOT-Damage-Challenge-/
 │
 └── overlay/
     ├── index.html    ← OBS Browser Source
-    └── admin.html    ← Admin-Panel
+    ├── admin.html    ← Admin-Panel
+    └── login.html    ← Login
 ```
 
 ---

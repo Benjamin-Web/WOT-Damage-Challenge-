@@ -3,9 +3,11 @@
 PORT         = 5000
 INITIAL_GOAL = 100000
 
-# Streamer-Namen werden auch live im Admin-Panel verwaltet.
-# Diese Liste wird beim Serverstart als Startwert geladen.
+# Streamer werden live im Admin-Panel verwaltet.
 STREAMER_NAMES = []
 
-# Admin-Passwort (leer lassen = kein Schutz)
+# Admin-Login-Passwort
 ADMIN_SECRET = 'changeme123'
+
+# Flask Session Secret — unbedingt aendern! (beliebige lange zufaellige Zeichenkette)
+SESSION_SECRET = 'BITTE-AENDERN-langer-zufaelliger-string-hier'

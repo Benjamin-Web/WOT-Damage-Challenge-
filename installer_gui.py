@@ -1,7 +1,7 @@
 """
-installer_gui.py — BeastSync Streamer-Setup (ein Klick, kein technisches Wissen noetig).
-Server-URL ist in installer_config.json gebacken.
-Streamer geben nur ihren WoT-Account-Namen ein.
+installer_gui.py — BeastSync Streamer-Setup.
+Modernes Dark-UI mit CustomTkinter.
+Streamer geben nur ihren WoT-Namen ein — alles andere ist automatisch.
 """
 
 import sys
@@ -9,77 +9,86 @@ import os
 import json
 import shutil
 import winreg
+import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox
+import customtkinter as ctk
+
+# ─── Appearance ───────────────────────────────────────────────────────────────
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+# ─── Farben (konsistent mit Admin-Panel) ──────────────────────────────────────
+
+BG      = "#0d1117"
+BG2     = "#161b22"
+BDR     = "#30363d"
+ACCENT  = "#ffe033"
+GREEN   = "#3fb950"
+RED     = "#f85149"
+WHITE   = "#e6edf3"
+GRAY    = "#8b949e"
 
 # ─── Ressourcenpfad ───────────────────────────────────────────────────────────
 
 def _res(rel):
-    base = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, rel)
 
-
-# ─── Gebundene Konfiguration laden ────────────────────────────────────────────
-
 def _load_installer_config():
-    path = _res('installer_config.json')
     try:
-        with open(path, 'r') as f:
+        with open(_res("installer_config.json"), "r") as f:
             return json.load(f)
     except Exception:
-        return {'server_url': 'http://localhost:5000', 'event_name': 'BeastSync Challenge'}
-
+        return {"server_url": "http://localhost:5000",
+                "event_name": "BeastSync Challenge"}
 
 _icfg      = _load_installer_config()
-SERVER_URL = _icfg.get('server_url', 'http://localhost:5000')
-EVENT_NAME = _icfg.get('event_name', 'BeastSync Challenge')
-WOTMOD_SRC = _res(os.path.join('dist', 'mohjobeist_beastsync.wotmod'))
+SERVER_URL = _icfg.get("server_url", "http://localhost:5000")
+EVENT_NAME = _icfg.get("event_name", "BeastSync Challenge")
+WOTMOD_SRC = _res(os.path.join("dist", "mohjobeist_beastsync.wotmod"))
 
-# ─── WoT Auto-Erkennung ───────────────────────────────────────────────────────
+# ─── WoT-Erkennung ────────────────────────────────────────────────────────────
 
-_REGISTRY_KEYS = [
+_REG_KEYS = [
     (winreg.HKEY_LOCAL_MACHINE,
-     r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{1EAC1D02-C6AC-4FA6-9A44-96258C37C812}',
-     'InstallLocation'),
+     r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{1EAC1D02-C6AC-4FA6-9A44-96258C37C812}",
+     "InstallLocation"),
     (winreg.HKEY_LOCAL_MACHINE,
-     r'SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{1EAC1D02-C6AC-4FA6-9A44-96258C37C812}',
-     'InstallLocation'),
+     r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{1EAC1D02-C6AC-4FA6-9A44-96258C37C812}",
+     "InstallLocation"),
 ]
-
-_COMMON_PATHS = [
-    r'C:\Games\World_of_Tanks',
-    r'C:\Games\World_of_Tanks_EU',
-    r'D:\Games\World_of_Tanks',
-    r'C:\Program Files (x86)\World_of_Tanks',
-    r'C:\Program Files\World_of_Tanks',
+_COMMON = [
+    r"C:\Games\World_of_Tanks",
+    r"C:\Games\World_of_Tanks_EU",
+    r"D:\Games\World_of_Tanks",
+    r"C:\Program Files (x86)\World_of_Tanks",
 ]
-
 
 def _find_wot():
-    for hkey, sub, val in _REGISTRY_KEYS:
+    for hkey, sub, val in _REG_KEYS:
         try:
             with winreg.OpenKey(hkey, sub) as k:
-                path, _ = winreg.QueryValueEx(k, val)
-                if path and os.path.isfile(os.path.join(path, 'WorldOfTanks.exe')):
-                    return path
+                p, _ = winreg.QueryValueEx(k, val)
+                if p and os.path.isfile(os.path.join(p, "WorldOfTanks.exe")):
+                    return p
         except (FileNotFoundError, OSError):
             pass
     try:
-        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r'SOFTWARE\Valve\Steam') as k:
-            steam, _ = winreg.QueryValueEx(k, 'InstallPath')
-        p = os.path.join(steam, 'steamapps', 'common', 'World of Tanks')
-        if os.path.isfile(os.path.join(p, 'WorldOfTanks.exe')):
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam") as k:
+            steam, _ = winreg.QueryValueEx(k, "InstallPath")
+        p = os.path.join(steam, "steamapps", "common", "World of Tanks")
+        if os.path.isfile(os.path.join(p, "WorldOfTanks.exe")):
             return p
     except (FileNotFoundError, OSError):
         pass
-    for p in _COMMON_PATHS:
-        if os.path.isfile(os.path.join(p, 'WorldOfTanks.exe')):
+    for p in _COMMON:
+        if os.path.isfile(os.path.join(p, "WorldOfTanks.exe")):
             return p
-    return ''
-
+    return ""
 
 def _find_version(wot_path):
-    res_mods = os.path.join(wot_path, 'res_mods')
+    res_mods = os.path.join(wot_path, "res_mods")
     if not os.path.isdir(res_mods):
         return None
     versions = sorted(
@@ -88,63 +97,39 @@ def _find_version(wot_path):
         reverse=True)
     return versions[0] if versions else None
 
-
-def _install(wot_path, streamer_name):
-    if not os.path.isfile(os.path.join(wot_path, 'WorldOfTanks.exe')):
-        return False, 'WorldOfTanks.exe nicht in diesem Ordner gefunden.'
-
+def _install(wot_path, name):
+    if not os.path.isfile(os.path.join(wot_path, "WorldOfTanks.exe")):
+        return False, "WorldOfTanks.exe nicht in diesem Ordner gefunden."
     version = _find_version(wot_path)
     if not version:
-        return False, (
-            'Keinen WoT-Versionsordner in res_mods/ gefunden.\n'
-            'Bitte World of Tanks einmal starten und danach nochmal versuchen.')
-
-    # .wotmod
-    mods_dir = os.path.join(wot_path, 'mods')
+        return False, ("Kein Versionsordner in res_mods/ gefunden.\n"
+                       "Bitte World of Tanks einmal starten, dann erneut versuchen.")
+    mods_dir = os.path.join(wot_path, "mods")
     os.makedirs(mods_dir, exist_ok=True)
-    shutil.copy2(WOTMOD_SRC, os.path.join(mods_dir, 'mohjobeist_beastsync.wotmod'))
-
-    # config.json
-    cfg_dir = os.path.join(wot_path, 'res_mods', version, 'mods', 'beastsync')
+    shutil.copy2(WOTMOD_SRC, os.path.join(mods_dir, "mohjobeist_beastsync.wotmod"))
+    cfg_dir = os.path.join(wot_path, "res_mods", version, "mods", "beastsync")
     os.makedirs(cfg_dir, exist_ok=True)
-    cfg = {
-        'server_url': SERVER_URL,
-        'streamer_name': streamer_name.strip(),
-        'enabled': True,
-        'send_interval_ms': 200,
-        'allowed_arena_types': [1, 7],
-    }
-    with open(os.path.join(cfg_dir, 'config.json'), 'w') as f:
-        json.dump(cfg, f, indent=2)
-
+    with open(os.path.join(cfg_dir, "config.json"), "w") as f:
+        json.dump({
+            "server_url":       SERVER_URL,
+            "streamer_name":    name.strip(),
+            "enabled":          True,
+            "send_interval_ms": 200,
+            "allowed_arena_types": [1, 7],
+        }, f, indent=2)
     return True, version
 
+# ─── App ──────────────────────────────────────────────────────────────────────
 
-# ─── GUI ──────────────────────────────────────────────────────────────────────
-
-BG     = '#0d1117'
-BG2    = '#161b22'
-BDR    = '#30363d'
-ACCENT = '#ffe033'
-GREEN  = '#3fb950'
-RED    = '#f85149'
-WHITE  = '#e6edf3'
-GRAY   = '#8b949e'
-FONT   = 'Segoe UI'
-
-
-class App(tk.Tk):
+class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title('BeastSync Setup — ' + EVENT_NAME)
-        self.configure(bg=BG)
+        self.title("BeastSync Setup")
+        self.geometry("460x540")
         self.resizable(False, False)
+        self.configure(fg_color=BG)
 
-        self._wot_path   = _find_wot()
-        self._page       = 0   # 0 = Eingabe, 1 = Ergebnis
-        self._name_var   = tk.StringVar()
-        self._path_var   = tk.StringVar(value=self._wot_path)
-
+        self._wot_path = _find_wot()
         self._build()
         self._center()
 
@@ -153,170 +138,169 @@ class App(tk.Tk):
         w, h = self.winfo_width(), self.winfo_height()
         x = (self.winfo_screenwidth()  - w) // 2
         y = (self.winfo_screenheight() - h) // 2
-        self.geometry(f'{w}x{h}+{x}+{y}')
+        self.geometry(f"{w}x{h}+{x}+{y}")
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
     def _build(self):
-        # Banner
-        banner = tk.Frame(self, bg=ACCENT, height=6)
-        banner.pack(fill='x')
+        # Accent-Streifen
+        accent_bar = tk.Frame(self, bg=ACCENT, height=4)
+        accent_bar.pack(fill="x")
 
         # Header
-        hdr = tk.Frame(self, bg=BG, padx=28, pady=20)
-        hdr.pack(fill='x')
-        tk.Label(hdr, text='🐾 BeastSync', bg=BG, fg=ACCENT,
-                 font=(FONT, 20, 'bold')).pack(anchor='w')
-        tk.Label(hdr, text='Mod Setup — ' + EVENT_NAME,
-                 bg=BG, fg=GRAY, font=(FONT, 11)).pack(anchor='w')
+        hdr = ctk.CTkFrame(self, fg_color=BG2, corner_radius=0)
+        hdr.pack(fill="x")
+        ctk.CTkLabel(hdr, text="🐾  BeastSync",
+                     font=ctk.CTkFont("Segoe UI", 22, "bold"),
+                     text_color=ACCENT).pack(anchor="w", padx=24, pady=(18, 2))
+        ctk.CTkLabel(hdr, text="Mod Setup — " + EVENT_NAME,
+                     font=ctk.CTkFont("Segoe UI", 12),
+                     text_color=GRAY).pack(anchor="w", padx=24, pady=(0, 16))
 
-        # Content-Frame (wird pro Seite neu befuellt)
-        self._content = tk.Frame(self, bg=BG, padx=28)
-        self._content.pack(fill='both', expand=True)
+        # Body
+        body = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
+        body.pack(fill="both", expand=True, padx=24, pady=20)
 
-        # Footer
-        self._footer = tk.Frame(self, bg=BG2, padx=28, pady=16)
-        self._footer.pack(fill='x')
+        # WoT-Name
+        ctk.CTkLabel(body,
+                     text="DEIN WORLD OF TANKS ACCOUNT-NAME",
+                     font=ctk.CTkFont("Segoe UI", 10, "bold"),
+                     text_color=GRAY).pack(anchor="w", pady=(0, 6))
 
-        self._show_input()
+        self.name_entry = ctk.CTkEntry(
+            body,
+            placeholder_text="z.B. Mohjo_beist",
+            font=ctk.CTkFont("Segoe UI", 15),
+            height=46,
+            fg_color=BG2,
+            border_color=BDR,
+            text_color=WHITE,
+            placeholder_text_color=GRAY,
+            corner_radius=8)
+        self.name_entry.pack(fill="x", pady=(0, 6))
+        self.name_entry.bind("<Return>", lambda _: self._try_install())
 
-    def _clear(self):
-        for w in self._content.winfo_children():
-            w.destroy()
-        for w in self._footer.winfo_children():
-            w.destroy()
+        ctk.CTkLabel(body,
+                     text="⚠  Groß-/Kleinschreibung beachten",
+                     font=ctk.CTkFont("Segoe UI", 11, "italic"),
+                     text_color=GRAY).pack(anchor="w", pady=(0, 20))
 
-    # ── Seite 1: Eingabe ──────────────────────────────────────────────────────
+        # Trennlinie
+        tk.Frame(body, bg=BDR, height=1).pack(fill="x", pady=(0, 16))
 
-    def _show_input(self):
-        self._clear()
-        c = self._content
+        # WoT-Pfad-Status
+        wot_ok = os.path.isfile(os.path.join(self._wot_path, "WorldOfTanks.exe"))
+        version = _find_version(self._wot_path) if wot_ok else None
 
-        tk.Label(c, text='Dein World of Tanks Account-Name',
-                 bg=BG, fg=WHITE, font=(FONT, 12, 'bold')).pack(anchor='w', pady=(0, 6))
-        tk.Label(c,
-                 text='Genau so eingeben wie er im Spiel angezeigt wird.',
-                 bg=BG, fg=GRAY, font=(FONT, 10)).pack(anchor='w', pady=(0, 12))
+        if wot_ok and version:
+            icon, color, txt = "✅", GREEN, f"World of Tanks gefunden  ·  Version {version}"
+        elif wot_ok:
+            icon, color, txt = "⚠", "#d29922", "WoT gefunden, aber res_mods/ fehlt — bitte WoT einmal starten"
+        else:
+            icon, color, txt = "✗", RED, "World of Tanks nicht gefunden"
 
-        # Name-Eingabe
-        name_entry = tk.Entry(self._content, textvariable=self._name_var,
-                              bg=BG2, fg=WHITE, insertbackground=WHITE,
-                              font=(FONT, 14), bd=0, relief='flat',
-                              highlightthickness=1, highlightbackground=BDR,
-                              highlightcolor=ACCENT)
-        name_entry.pack(fill='x', ipady=10, pady=(0, 4))
-        name_entry.focus_set()
-        name_entry.bind('<Return>', lambda _: self._try_install())
+        path_row = ctk.CTkFrame(body, fg_color="transparent")
+        path_row.pack(fill="x")
 
-        tk.Label(c, text='⚠  Groß-/Kleinschreibung beachten!',
-                 bg=BG, fg=GRAY, font=(FONT, 9, 'italic')).pack(anchor='w')
+        self.path_label = ctk.CTkLabel(
+            path_row, text=f"{icon}  {txt}",
+            font=ctk.CTkFont("Segoe UI", 11),
+            text_color=color)
+        self.path_label.pack(side="left")
 
-        # WoT-Pfad (zugeklappt, nur bei Bedarf sichtbar)
-        sep = tk.Frame(c, bg=BDR, height=1)
-        sep.pack(fill='x', pady=18)
+        ctk.CTkButton(
+            path_row, text="Anderen Ordner",
+            font=ctk.CTkFont("Segoe UI", 11),
+            width=120, height=28,
+            fg_color=BG2, hover_color=BDR,
+            text_color=GRAY, border_color=BDR, border_width=1,
+            corner_radius=6,
+            command=self._browse).pack(side="right")
 
-        path_row = tk.Frame(c, bg=BG)
-        path_row.pack(fill='x')
+        # Spacer
+        ctk.CTkFrame(body, fg_color="transparent", height=20).pack()
 
-        path_icon = '✅' if os.path.isfile(
-            os.path.join(self._path_var.get(), 'WorldOfTanks.exe')) else '⚠'
-        self._path_status = tk.Label(
-            path_row, text=f'{path_icon}  WoT gefunden',
-            bg=BG, fg=GREEN if path_icon == '✅' else '#ffaa33',
-            font=(FONT, 10))
-        self._path_status.pack(side='left')
+        # Installieren-Button
+        self.install_btn = ctk.CTkButton(
+            body,
+            text="Jetzt installieren  →",
+            font=ctk.CTkFont("Segoe UI", 14, "bold"),
+            height=48,
+            fg_color=ACCENT,
+            hover_color="#e6c900",
+            text_color="#0d1117",
+            corner_radius=8,
+            command=self._try_install)
+        self.install_btn.pack(fill="x")
 
-        tk.Button(path_row, text='Anderen Ordner wählen',
-                  bg=BG2, fg=GRAY, font=(FONT, 9), bd=0,
-                  padx=10, pady=4, cursor='hand2',
-                  command=self._browse).pack(side='right')
+        # Status-Label (Ergebnis)
+        self.status_label = ctk.CTkLabel(
+            body, text="",
+            font=ctk.CTkFont("Segoe UI", 12),
+            text_color=GRAY,
+            wraplength=380,
+            justify="left")
+        self.status_label.pack(anchor="w", pady=(14, 0))
 
-        # Footer: Installieren-Button
-        tk.Button(self._footer, text='Jetzt installieren  →',
-                  bg=ACCENT, fg='#0d1117',
-                  font=(FONT, 12, 'bold'), bd=0,
-                  padx=24, pady=10, cursor='hand2',
-                  command=self._try_install).pack(side='right')
+    # ── Aktionen ──────────────────────────────────────────────────────────────
 
     def _browse(self):
-        p = filedialog.askdirectory(title='World of Tanks Ordner auswählen')
-        if p:
-            self._path_var.set(p)
-            ok = os.path.isfile(os.path.join(p, 'WorldOfTanks.exe'))
-            self._path_status.config(
-                text=('✅  WoT gefunden' if ok else '✗  WorldOfTanks.exe nicht gefunden'),
-                fg=(GREEN if ok else RED))
+        from tkinter import filedialog
+        p = filedialog.askdirectory(title="World of Tanks Ordner wählen")
+        if not p:
+            return
+        self._wot_path = p
+        ok = os.path.isfile(os.path.join(p, "WorldOfTanks.exe"))
+        v  = _find_version(p) if ok else None
+        if ok and v:
+            self.path_label.configure(
+                text=f"✅  World of Tanks gefunden  ·  Version {v}",
+                text_color=GREEN)
+        elif ok:
+            self.path_label.configure(
+                text="⚠  WoT gefunden, aber res_mods/ fehlt — bitte WoT starten",
+                text_color="#d29922")
+        else:
+            self.path_label.configure(
+                text="✗  WorldOfTanks.exe nicht gefunden",
+                text_color=RED)
 
     def _try_install(self):
-        name = self._name_var.get().strip()
+        name = self.name_entry.get().strip()
         if not name:
-            messagebox.showwarning('Hinweis', 'Bitte deinen WoT-Account-Namen eingeben.')
+            self.status_label.configure(
+                text="⚠  Bitte deinen WoT-Account-Namen eingeben.",
+                text_color="#d29922")
+            return
+        if not os.path.isfile(os.path.join(self._wot_path, "WorldOfTanks.exe")):
+            self.status_label.configure(
+                text="✗  WoT-Ordner nicht gefunden. Bitte 'Anderen Ordner' wählen.",
+                text_color=RED)
             return
 
-        if not os.path.isfile(os.path.join(self._path_var.get(), 'WorldOfTanks.exe')):
-            messagebox.showerror('Fehler',
-                'WoT-Ordner nicht gefunden.\nBitte "Anderen Ordner wählen" nutzen.')
-            return
+        self.install_btn.configure(state="disabled", text="Installiere…")
+        self.status_label.configure(text="", text_color=GRAY)
 
-        self._show_progress()
-        self.update()
+        threading.Thread(target=self._do_install, args=(name,), daemon=True).start()
 
-        ok, result = _install(self._path_var.get(), name)
-        self._show_result(ok, name, result)
-
-    # ── Seite 2: Fortschritt / Ergebnis ───────────────────────────────────────
-
-    def _show_progress(self):
-        self._clear()
-        tk.Label(self._content, text='Installiere…',
-                 bg=BG, fg=GRAY, font=(FONT, 13)).pack(pady=30)
+    def _do_install(self, name):
+        ok, result = _install(self._wot_path, name)
+        self.after(0, lambda: self._show_result(ok, name, result))
 
     def _show_result(self, ok, name, result):
-        self._clear()
-        c = self._content
-
+        self.install_btn.configure(state="normal", text="Jetzt installieren  →")
         if ok:
-            tk.Label(c, text='✅  Fertig!', bg=BG, fg=GREEN,
-                     font=(FONT, 18, 'bold')).pack(anchor='w', pady=(0, 12))
-            tk.Label(c,
-                     text=f'Der Mod wurde erfolgreich installiert.\nWoT-Version: {result}',
-                     bg=BG, fg=WHITE, font=(FONT, 11), justify='left').pack(anchor='w')
-
-            tk.Frame(c, bg=BDR, height=1).pack(fill='x', pady=18)
-
-            tk.Label(c, text='Nächste Schritte:', bg=BG, fg=GRAY,
-                     font=(FONT, 10, 'bold')).pack(anchor='w')
-            steps = [
-                f'1.  World of Tanks neu starten',
-                f'2.  Eine Runde spielen',
-                f'3.  Der Veranstalter sieht dich dann als "{name}" im System',
-            ]
-            for s in steps:
-                tk.Label(c, text=s, bg=BG, fg=WHITE,
-                         font=(FONT, 10)).pack(anchor='w', pady=2)
-
-            # Footer: Schließen
-            tk.Button(self._footer, text='Schließen',
-                      bg=ACCENT, fg='#0d1117',
-                      font=(FONT, 12, 'bold'), bd=0,
-                      padx=24, pady=10, cursor='hand2',
-                      command=self.destroy).pack(side='right')
-
+            self.status_label.configure(
+                text=(f"✅  Fertig! WoT-Version {result}\n\n"
+                      f"Starte World of Tanks neu.\n"
+                      f"Spiel eine Runde — der Veranstalter sieht dich dann als \"{name}\"."),
+                text_color=GREEN)
+            self.install_btn.configure(text="Fertig ✓", state="disabled",
+                                       fg_color=BG2, text_color=GREEN)
         else:
-            tk.Label(c, text='❌  Fehler', bg=BG, fg=RED,
-                     font=(FONT, 18, 'bold')).pack(anchor='w', pady=(0, 12))
-            tk.Label(c, text=result, bg=BG, fg=WHITE,
-                     font=(FONT, 11), justify='left', wraplength=400).pack(anchor='w')
-
-            # Footer: Zurück
-            tk.Button(self._footer, text='← Zurück',
-                      bg=BG2, fg=WHITE,
-                      font=(FONT, 12, 'bold'), bd=0,
-                      padx=24, pady=10, cursor='hand2',
-                      command=self._show_input).pack(side='right')
-
+            self.status_label.configure(text=f"✗  {result}", text_color=RED)
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     App().mainloop()
