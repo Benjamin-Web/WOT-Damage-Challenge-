@@ -1,0 +1,10 @@
+services:
+  beastsync:
+    build: .
+    container_name: beastsync
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Damit config.py editierbar bleibt ohne Image-Rebuild
+      - ./server/config.py:/app/server/config.py:ro

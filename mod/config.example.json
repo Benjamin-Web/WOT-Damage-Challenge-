@@ -1,0 +1,7 @@
+{
+  "server_url": "http://192.168.1.100:5000",
+  "streamer_name": "MeinWoT_AccountName",
+  "enabled": true,
+  "send_interval_ms": 200,
+  "allowed_arena_types": [1, 7]
+}

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BeastSync Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #0d1117;
+      --bg2:    #161b22;
+      --bdr:    #30363d;
+      --accent: #ffe033;
+      --green:  #3fb950;
+      --red:    #f85149;
+      --white:  #e6edf3;
+      --gray:   #8b949e;
+    }
+
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--bg);
+           color: var(--white); min-height: 100vh; }
+
+    /* ── Layout ── */
+    .header { background: var(--bg2); border-bottom: 1px solid var(--bdr);
+               padding: 16px 28px; display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 20px; color: var(--accent); }
+    .header .sub { font-size: 13px; color: var(--gray); margin-left: auto; }
+
+    .main { display: grid; grid-template-columns: 1fr 340px;
+            gap: 20px; padding: 24px 28px; max-width: 1100px; margin: 0 auto; }
+
+    @media (max-width: 700px) { .main { grid-template-columns: 1fr; } }
+
+    /* ── Cards ── */
+    .card { background: var(--bg2); border: 1px solid var(--bdr);
+            border-radius: 8px; overflow: hidden; }
+    .card-head { padding: 12px 16px; background: var(--bg);
+                 border-bottom: 1px solid var(--bdr);
+                 font-size: 12px; font-weight: bold; color: var(--gray);
+                 text-transform: uppercase; letter-spacing: 1px; }
+    .card-body { padding: 16px; }
+
+    /* ── Stats ── */
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr);
+             gap: 12px; margin-bottom: 20px; }
+    .stat { background: var(--bg2); border: 1px solid var(--bdr);
+            border-radius: 8px; padding: 16px; text-align: center; }
+    .stat .label { font-size: 11px; color: var(--gray); text-transform: uppercase;
+                   letter-spacing: 1px; }
+    .stat .val { font-size: 32px; font-weight: 900; margin-top: 4px; }
+    .stat.remaining .val { color: var(--accent); }
+    .stat.dealt     .val { color: var(--green); }
+
+    /* ── Progress ── */
+    .progress-wrap { background: var(--bg); border-radius: 4px;
+                     height: 8px; margin: 0 0 20px; overflow: hidden; }
+    .progress-bar  { background: var(--accent); height: 100%;
+                     transition: width 0.4s ease; border-radius: 4px; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { padding: 8px 12px; text-align: left; font-size: 11px;
+         text-transform: uppercase; letter-spacing: 1px; color: var(--gray);
+         border-bottom: 1px solid var(--bdr); }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--bg);
+         vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .online  { color: var(--green); font-weight: bold; }
+    .offline { color: var(--gray); }
+    .inactive { opacity: 0.4; font-style: italic; }
+
+    /* ── Buttons ── */
+    button { border: none; border-radius: 6px; cursor: pointer;
+             font-family: inherit; font-weight: bold; transition: opacity 0.15s; }
+    button:hover { opacity: 0.82; }
+    .btn        { padding: 8px 18px; font-size: 13px; }
+    .btn-accent { background: var(--accent); color: #0d1117; }
+    .btn-danger { background: var(--red);    color: #fff; }
+    .btn-ghost  { background: var(--bg);     color: var(--white);
+                  border: 1px solid var(--bdr); }
+    .btn-sm     { padding: 4px 10px; font-size: 12px; }
+
+    /* ── Form ── */
+    input[type="text"], input[type="number"], input[type="password"] {
+      background: var(--bg); border: 1px solid var(--bdr); color: var(--white);
+      padding: 8px 12px; border-radius: 6px; font-family: inherit;
+      font-size: 13px; width: 100%; outline: none; }
+    input:focus { border-color: var(--accent); }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 11px; color: var(--gray);
+                   text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+
+    /* ── Log ── */
+    .log { font-size: 12px; font-family: monospace; max-height: 260px;
+           overflow-y: auto; }
+    .log-entry { padding: 5px 0; border-bottom: 1px solid var(--bg);
+                 display: flex; gap: 8px; }
+    .log-entry:last-child { border-bottom: none; }
+    .log-t   { color: var(--gray); min-width: 54px; }
+    .log-who { font-weight: bold; min-width: 120px; }
+    .log-dmg { color: var(--green); }
+    .log-rem { color: var(--accent); margin-left: auto; }
+
+    /* ── Paused banner ── */
+    .paused-banner { display: none; background: var(--red); color: #fff;
+                     padding: 10px 28px; font-weight: bold; font-size: 14px;
+                     text-align: center; }
+  </style>
+</head>
+<body>
+
+<div class="paused-banner" id="paused-banner">⏸  EVENT PAUSIERT</div>
+
+<div class="header">
+  <span>🐾</span>
+  <h1>BeastSync Admin</h1>
+  <span class="sub" id="hdr-sub">–</span>
+</div>
+
+<div class="main">
+  <!-- Linke Spalte -->
+  <div>
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat remaining">
+        <div class="label">Restdamage</div>
+        <div class="val" id="s-rem">–</div>
+      </div>
+      <div class="stat dealt">
+        <div class="label">Dealt gesamt</div>
+        <div class="val" id="s-dealt">–</div>
+      </div>
+      <div class="stat">
+        <div class="label">Ziel</div>
+        <div class="val" id="s-goal">–</div>
+      </div>
+    </div>
+    <div class="progress-wrap"><div class="progress-bar" id="pbar" style="width:0%"></div></div>
+
+    <!-- Streamer-Tabelle -->
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-head">Streamer</div>
+      <div class="card-body" style="padding:0">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Damage</th>
+              <th>Zuletzt</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="streamer-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Event-Log -->
+    <div class="card">
+      <div class="card-head">Live-Log (letzte Treffer)</div>
+      <div class="card-body">
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rechte Spalte -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    <!-- Streamer hinzufuegen -->
+    <div class="card">
+      <div class="card-head">Streamer hinzufügen</div>
+      <div class="card-body">
+        <div class="field">
+          <label>WoT-Account-Name</label>
+          <input type="text" id="add-name" placeholder="z.B. Mohjo_beist">
+        </div>
+        <button class="btn btn-accent" style="width:100%" onclick="addStreamer()">
+          + Hinzufügen
+        </button>
+        <p style="font-size:11px;color:var(--gray);margin-top:8px">
+          Nicht eingetragene Streamer werden beim ersten Damage automatisch registriert.
+        </p>
+      </div>
+    </div>
+
+    <!-- Event-Controls -->
+    <div class="card">
+      <div class="card-head">Event steuern</div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+        <div class="field">
+          <label>Schaden-Ziel</label>
+          <input type="number" id="goal-input" placeholder="z.B. 100000" min="1">
+        </div>
+        <button class="btn btn-accent" onclick="setGoal()">Ziel setzen</button>
+        <button class="btn btn-ghost" id="btn-pause" onclick="togglePause()">⏸  Pause</button>
+        <button class="btn btn-danger" onclick="doReset()">↺  Reset (Daten löschen)</button>
+      </div>
+    </div>
+
+    <!-- Auth -->
+    <div class="card">
+      <div class="card-head">Admin-Passwort</div>
+      <div class="card-body">
+        <input type="password" id="secret" placeholder="Passwort eingeben">
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const POLL = 2000;
+  let paused = false;
+
+  const fmt = n => Math.max(0, Math.round(n)).toLocaleString('de-DE');
+
+  function timeSince(iso) {
+    if (!iso) return '—';
+    const s = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 5)  return 'gerade';
+    if (s < 60) return s + 's';
+    return Math.round(s / 60) + 'min';
+  }
+
+  function secret() { return document.getElementById('secret').value; }
+
+  async function fetchStatus() {
+    try {
+      const d = await (await fetch('/status')).json();
+      render(d);
+    } catch (e) {}
+  }
+
+  function render(d) {
+    paused = d.paused;
+    document.getElementById('s-rem').textContent   = fmt(d.remaining);
+    document.getElementById('s-dealt').textContent = fmt(d.total_dealt);
+    document.getElementById('s-goal').textContent  = fmt(d.goal);
+    document.getElementById('hdr-sub').textContent =
+      `${fmt(d.total_dealt)} / ${fmt(d.goal)} Damage`;
+    document.getElementById('paused-banner').style.display = paused ? 'block' : 'none';
+    document.getElementById('pbar').style.width =
+      Math.min(100, d.goal > 0 ? d.total_dealt / d.goal * 100 : 0) + '%';
+
+    const btn = document.getElementById('btn-pause');
+    btn.textContent = paused ? '▶  Fortsetzen' : '⏸  Pause';
+    btn.className   = paused ? 'btn btn-ghost' : 'btn btn-ghost';
+
+    // Streamer-Tabelle
+    const tbody = document.getElementById('streamer-tbody');
+    tbody.innerHTML = '';
+    for (const [name, info] of Object.entries(d.streamers)) {
+      const active  = info.active !== false;
+      const age     = info.last_seen
+        ? (Date.now() - new Date(info.last_seen).getTime()) / 1000 : Infinity;
+      const online  = active && age < 90;
+      const tr = document.createElement('tr');
+      if (!active) tr.className = 'inactive';
+      tr.innerHTML = `
+        <td>${name}</td>
+        <td>${fmt(info.damage)}</td>
+        <td>${timeSince(info.last_seen)}</td>
+        <td class="${online ? 'online' : 'offline'}">${online ? '● Online' : '○ Offline'}</td>
+        <td>
+          ${active
+            ? `<button class="btn btn-sm btn-danger" onclick="removeStreamer('${name}')">✕</button>`
+            : `<button class="btn btn-sm btn-ghost" onclick="readdStreamer('${name}')">+</button>`}
+        </td>`;
+      tbody.appendChild(tr);
+    }
+
+    // Log
+    const logEl = document.getElementById('log');
+    const entries = (d.event_log || []).slice().reverse();
+    logEl.innerHTML = entries.length
+      ? entries.map(e => `
+          <div class="log-entry">
+            <span class="log-t">${e.t}</span>
+            <span class="log-who">${e.streamer}</span>
+            <span class="log-dmg">+${fmt(e.damage)}</span>
+            <span class="log-rem">${fmt(e.remaining)}</span>
+          </div>`).join('')
+      : '<div style="color:var(--gray)">Noch keine Einträge.</div>';
+  }
+
+  async function post(path, body) {
+    try {
+      const r = await fetch(path, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({...body, secret: secret()}),
+      });
+      return r.json();
+    } catch (e) { alert('Netzwerkfehler: ' + e); }
+  }
+
+  async function addStreamer() {
+    const name = document.getElementById('add-name').value.trim();
+    if (!name) { alert('Bitte einen Namen eingeben.'); return; }
+    const r = await post('/admin/streamers', {action: 'add', name});
+    if (r?.ok) { document.getElementById('add-name').value = ''; fetchStatus(); }
+    else alert('Fehler: ' + (r?.error || '?'));
+  }
+
+  async function removeStreamer(name) {
+    if (!confirm(`"${name}" aus dem Event entfernen?`)) return;
+    const r = await post('/admin/streamers', {action: 'remove', name});
+    if (r?.ok) fetchStatus();
+    else alert('Fehler: ' + (r?.error || '?'));
+  }
+
+  async function readdStreamer(name) {
+    const r = await post('/admin/streamers', {action: 'add', name});
+    if (r?.ok) fetchStatus();
+    else alert('Fehler: ' + (r?.error || '?'));
+  }
+
+  async function setGoal() {
+    const goal = parseInt(document.getElementById('goal-input').value);
+    if (!goal || goal <= 0) { alert('Bitte ein gültiges Ziel eingeben.'); return; }
+    const r = await post('/admin/set', {goal});
+    if (r?.ok) fetchStatus(); else alert('Fehler: ' + r?.error);
+  }
+
+  async function doReset() {
+    if (!confirm('Wirklich alle Damage-Daten zurücksetzen?')) return;
+    const goal = parseInt(document.getElementById('goal-input').value) || null;
+    const r = await post('/admin/set', {reset: true, goal});
+    if (r?.ok) fetchStatus(); else alert('Fehler: ' + r?.error);
+  }
+
+  async function togglePause() {
+    const r = await post('/admin/pause', {paused: !paused});
+    if (r?.ok) fetchStatus(); else alert('Fehler: ' + r?.error);
+  }
+
+  fetchStatus();
+  setInterval(fetchStatus, POLL);
+</script>
+</body>
+</html>

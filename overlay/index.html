@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Restdamage Overlay</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: transparent;
+      font-family: 'Arial Black', Arial, sans-serif;
+      overflow: hidden;
+      display: inline-block;
+    }
+
+    .container {
+      display: inline-block;
+      padding: 10px 20px 12px;
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 4px;
+    }
+
+    .label {
+      color: #bbbbbb;
+      font-size: 13px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+
+    .value {
+      color: #ffffff;
+      font-size: 36px;
+      font-weight: 900;
+      line-height: 1.1;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+      transition: color 0.4s ease;
+    }
+
+    .value.flash {
+      color: #ffe033;
+    }
+
+    .paused-badge {
+      display: none;
+      font-size: 11px;
+      color: #ff4444;
+      font-weight: bold;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    .paused .paused-badge {
+      display: block;
+    }
+
+    .done-badge {
+      display: none;
+      font-size: 11px;
+      color: #44ff88;
+      font-weight: bold;
+      letter-spacing: 1px;
+      margin-top: 2px;
+    }
+
+    .done .done-badge {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="root">
+    <div class="label">Restdamage</div>
+    <div class="value" id="counter">--.---</div>
+    <div class="paused-badge">&#9646;&#9646; PAUSE</div>
+    <div class="done-badge">&#10003; ZIEL ERREICHT!</div>
+  </div>
+
+  <script>
+    // Server-URL — muss zur IP des Server-PCs zeigen
+    const SERVER_URL = '';   // leer = gleicher Host (wenn OBS /overlay vom Server laedt)
+    const POLL_MS = 500;
+
+    const counterEl = document.getElementById('counter');
+    const rootEl    = document.getElementById('root');
+
+    let lastRemaining = null;
+    let flashTimer = null;
+
+    function fmt(n) {
+      // "98.193" — Punkt als Tausendertrenner (deutsch)
+      return Math.max(0, Math.round(n)).toLocaleString('de-DE');
+    }
+
+    async function poll() {
+      try {
+        const res  = await fetch(SERVER_URL + '/status');
+        const data = await res.json();
+
+        const remaining = data.remaining;
+        const paused    = data.paused;
+        const done      = remaining <= 0;
+
+        rootEl.classList.toggle('paused', paused && !done);
+        rootEl.classList.toggle('done',   done);
+
+        if (lastRemaining !== null && remaining !== lastRemaining) {
+          clearTimeout(flashTimer);
+          counterEl.classList.add('flash');
+          flashTimer = setTimeout(() => counterEl.classList.remove('flash'), 700);
+        }
+
+        counterEl.textContent = fmt(remaining);
+        lastRemaining = remaining;
+      } catch (e) {
+        // Verbindungsfehler: letzten Wert behalten
+      }
+    }
+
+    poll();
+    setInterval(poll, POLL_MS);
+  </script>
+</body>
+</html>

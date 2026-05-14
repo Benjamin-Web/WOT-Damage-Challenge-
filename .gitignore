@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+
+# PyInstaller
+build/
+*.spec
+
+# Distribution / Binaries
+dist/*.exe
+dist/*.wotmod
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
