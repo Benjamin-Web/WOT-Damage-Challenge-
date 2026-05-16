@@ -363,7 +363,7 @@
       </div>
       <div class="modal-foot">
         <button class="btn btn-secondary" onclick="closeWizard()">Abbrechen</button>
-        <button class="btn btn-primary" onclick="createEvent()">Event erstellen</button>
+        <button class="btn btn-primary" onclick="wizardSubmit()">Event erstellen</button>
       </div>
     </div>
   </div>
@@ -538,7 +538,7 @@
       renderWizardTeams();
     }
 
-    async function createEvent() {
+    async function wizardSubmit() {
       const payload = {
         name:  $('w-name').value.trim() || 'Mohjos DamageRace',
         goal:  parseInt($('w-goal').value) || 100000,
