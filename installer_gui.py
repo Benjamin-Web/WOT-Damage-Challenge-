@@ -1,6 +1,6 @@
 """
-installer_gui.py — BeastSync Streamer-Setup.
-Modernes Dark-UI mit CustomTkinter.
+installer_gui.py — Mohjos DamageRace Streamer-Setup.
+Modernes Dark-UI mit CustomTkinter, Heist-Bot-Branding (Gold).
 Streamer geben nur ihren WoT-Namen ein — alles andere ist automatisch.
 """
 
@@ -18,16 +18,19 @@ import customtkinter as ctk
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-# ─── Farben (konsistent mit Admin-Panel) ──────────────────────────────────────
+# ─── Brand-Farben (Heist Bot M3 Gold-Theme) ───────────────────────────────────
 
-BG      = "#0d1117"
-BG2     = "#161b22"
-BDR     = "#30363d"
-ACCENT  = "#ffe033"
-GREEN   = "#3fb950"
-RED     = "#f85149"
-WHITE   = "#e6edf3"
-GRAY    = "#8b949e"
+BG      = "#0d0d14"     # surface-dim
+BG2     = "#17171f"     # surface-container
+BG3     = "#1e1e28"     # surface-container-high
+BDR     = "#2a2a35"     # outline
+ACCENT  = "#ffd700"     # primary
+ACCENT2 = "#efb700"     # tertiary
+GREEN   = "#00e676"
+RED     = "#cf6679"
+WHITE   = "#f3f4f6"
+GRAY    = "#9ca3af"
+DIM     = "#6b7280"
 
 # ─── Ressourcenpfad ───────────────────────────────────────────────────────────
 
@@ -41,12 +44,12 @@ def _load_installer_config():
             return json.load(f)
     except Exception:
         return {"server_url": "http://localhost:5000",
-                "event_name": "BeastSync Challenge"}
+                "event_name": "Mohjos DamageRace"}
 
 _icfg      = _load_installer_config()
 SERVER_URL = _icfg.get("server_url", "http://localhost:5000")
-EVENT_NAME = _icfg.get("event_name", "BeastSync Challenge")
-WOTMOD_SRC = _res(os.path.join("dist", "mohjobeist_beastsync.wotmod"))
+EVENT_NAME = _icfg.get("event_name", "Mohjos DamageRace")
+WOTMOD_SRC = _res(os.path.join("dist", "mohjos_damagerace.wotmod"))
 
 # ─── WoT-Erkennung ────────────────────────────────────────────────────────────
 
@@ -106,8 +109,8 @@ def _install(wot_path, name):
                        "Bitte World of Tanks einmal starten, dann erneut versuchen.")
     mods_dir = os.path.join(wot_path, "mods")
     os.makedirs(mods_dir, exist_ok=True)
-    shutil.copy2(WOTMOD_SRC, os.path.join(mods_dir, "mohjobeist_beastsync.wotmod"))
-    cfg_dir = os.path.join(wot_path, "res_mods", version, "mods", "beastsync")
+    shutil.copy2(WOTMOD_SRC, os.path.join(mods_dir, "mohjos_damagerace.wotmod"))
+    cfg_dir = os.path.join(wot_path, "res_mods", version, "mods", "damagerace")
     os.makedirs(cfg_dir, exist_ok=True)
     with open(os.path.join(cfg_dir, "config.json"), "w") as f:
         json.dump({
@@ -124,8 +127,8 @@ def _install(wot_path, name):
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("BeastSync Setup")
-        self.geometry("460x540")
+        self.title("Mohjos DamageRace — Setup")
+        self.geometry("480x580")
         self.resizable(False, False)
         self.configure(fg_color=BG)
 
@@ -140,113 +143,113 @@ class App(ctk.CTk):
         y = (self.winfo_screenheight() - h) // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
 
-    # ── Layout ────────────────────────────────────────────────────────────────
-
     def _build(self):
-        # Accent-Streifen
-        accent_bar = tk.Frame(self, bg=ACCENT, height=4)
-        accent_bar.pack(fill="x")
+        # Gold-Accent oben
+        tk.Frame(self, bg=ACCENT, height=3).pack(fill="x")
 
         # Header
         hdr = ctk.CTkFrame(self, fg_color=BG2, corner_radius=0)
         hdr.pack(fill="x")
-        ctk.CTkLabel(hdr, text="🐾  BeastSync",
-                     font=ctk.CTkFont("Segoe UI", 22, "bold"),
-                     text_color=ACCENT).pack(anchor="w", padx=24, pady=(18, 2))
-        ctk.CTkLabel(hdr, text="Mod Setup — " + EVENT_NAME,
-                     font=ctk.CTkFont("Segoe UI", 12),
-                     text_color=GRAY).pack(anchor="w", padx=24, pady=(0, 16))
+        hdr_inner = ctk.CTkFrame(hdr, fg_color="transparent")
+        hdr_inner.pack(fill="x", padx=24, pady=(20, 18))
+
+        # Logo + Brand
+        logo_row = ctk.CTkFrame(hdr_inner, fg_color="transparent")
+        logo_row.pack(anchor="w")
+        mark = tk.Label(logo_row, text="M", bg=ACCENT, fg="#000",
+                        font=("Inter", 16, "bold"), width=2, height=1)
+        mark.pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(logo_row, text="Mohjos DamageRace",
+                     font=ctk.CTkFont("Inter", 20, "bold"),
+                     text_color=ACCENT).pack(side="left")
+        ctk.CTkLabel(hdr_inner,
+                     text="Mod-Installer  ·  " + EVENT_NAME,
+                     font=ctk.CTkFont("Inter", 11),
+                     text_color=GRAY).pack(anchor="w", pady=(6, 0))
 
         # Body
         body = ctk.CTkFrame(self, fg_color=BG, corner_radius=0)
-        body.pack(fill="both", expand=True, padx=24, pady=20)
+        body.pack(fill="both", expand=True, padx=24, pady=24)
 
-        # WoT-Name
         ctk.CTkLabel(body,
                      text="DEIN WORLD OF TANKS ACCOUNT-NAME",
-                     font=ctk.CTkFont("Segoe UI", 10, "bold"),
-                     text_color=GRAY).pack(anchor="w", pady=(0, 6))
+                     font=ctk.CTkFont("Inter", 10, "bold"),
+                     text_color=GRAY).pack(anchor="w", pady=(0, 8))
 
         self.name_entry = ctk.CTkEntry(
             body,
             placeholder_text="z.B. Mohjo_beist",
-            font=ctk.CTkFont("Segoe UI", 15),
+            font=ctk.CTkFont("Inter", 14),
             height=46,
             fg_color=BG2,
             border_color=BDR,
             text_color=WHITE,
-            placeholder_text_color=GRAY,
+            placeholder_text_color=DIM,
             corner_radius=8)
         self.name_entry.pack(fill="x", pady=(0, 6))
         self.name_entry.bind("<Return>", lambda _: self._try_install())
 
         ctk.CTkLabel(body,
-                     text="⚠  Groß-/Kleinschreibung beachten",
-                     font=ctk.CTkFont("Segoe UI", 11, "italic"),
-                     text_color=GRAY).pack(anchor="w", pady=(0, 20))
+                     text="Muss exakt zum Namen im Invite-Link passen (Groß-/Kleinschreibung)",
+                     font=ctk.CTkFont("Inter", 11),
+                     text_color=DIM).pack(anchor="w", pady=(0, 20))
 
-        # Trennlinie
-        tk.Frame(body, bg=BDR, height=1).pack(fill="x", pady=(0, 16))
+        tk.Frame(body, bg=BDR, height=1).pack(fill="x", pady=(0, 18))
 
         # WoT-Pfad-Status
         wot_ok = os.path.isfile(os.path.join(self._wot_path, "WorldOfTanks.exe"))
         version = _find_version(self._wot_path) if wot_ok else None
 
         if wot_ok and version:
-            icon, color, txt = "✅", GREEN, f"World of Tanks gefunden  ·  Version {version}"
+            icon, color, txt = "✓", GREEN, f"World of Tanks gefunden  ·  Version {version}"
         elif wot_ok:
-            icon, color, txt = "⚠", "#d29922", "WoT gefunden, aber res_mods/ fehlt — bitte WoT einmal starten"
+            icon, color, txt = "!", "#ff9800", "WoT gefunden, aber res_mods/ fehlt — bitte WoT einmal starten"
         else:
-            icon, color, txt = "✗", RED, "World of Tanks nicht gefunden"
+            icon, color, txt = "✕", RED, "World of Tanks nicht gefunden"
 
         path_row = ctk.CTkFrame(body, fg_color="transparent")
         path_row.pack(fill="x")
 
         self.path_label = ctk.CTkLabel(
             path_row, text=f"{icon}  {txt}",
-            font=ctk.CTkFont("Segoe UI", 11),
+            font=ctk.CTkFont("Inter", 11),
             text_color=color)
         self.path_label.pack(side="left")
 
         ctk.CTkButton(
             path_row, text="Anderen Ordner",
-            font=ctk.CTkFont("Segoe UI", 11),
-            width=120, height=28,
-            fg_color=BG2, hover_color=BDR,
-            text_color=GRAY, border_color=BDR, border_width=1,
+            font=ctk.CTkFont("Inter", 11),
+            width=130, height=30,
+            fg_color=BG3, hover_color=BDR,
+            text_color=WHITE, border_color=BDR, border_width=1,
             corner_radius=6,
             command=self._browse).pack(side="right")
 
-        # Spacer
-        ctk.CTkFrame(body, fg_color="transparent", height=20).pack()
+        ctk.CTkFrame(body, fg_color="transparent", height=24).pack()
 
-        # Installieren-Button
         self.install_btn = ctk.CTkButton(
             body,
             text="Jetzt installieren  →",
-            font=ctk.CTkFont("Segoe UI", 14, "bold"),
-            height=48,
+            font=ctk.CTkFont("Inter", 14, "bold"),
+            height=50,
             fg_color=ACCENT,
-            hover_color="#e6c900",
-            text_color="#0d1117",
+            hover_color=ACCENT2,
+            text_color="#000",
             corner_radius=8,
             command=self._try_install)
         self.install_btn.pack(fill="x")
 
-        # Status-Label (Ergebnis)
         self.status_label = ctk.CTkLabel(
             body, text="",
-            font=ctk.CTkFont("Segoe UI", 12),
+            font=ctk.CTkFont("Inter", 12),
             text_color=GRAY,
-            wraplength=380,
+            wraplength=400,
             justify="left")
-        self.status_label.pack(anchor="w", pady=(14, 0))
-
-    # ── Aktionen ──────────────────────────────────────────────────────────────
+        self.status_label.pack(anchor="w", pady=(16, 0))
 
     def _browse(self):
         from tkinter import filedialog
-        p = filedialog.askdirectory(title="World of Tanks Ordner wählen")
+        p = filedialog.askdirectory(title="World of Tanks Ordner waehlen")
         if not p:
             return
         self._wot_path = p
@@ -254,27 +257,27 @@ class App(ctk.CTk):
         v  = _find_version(p) if ok else None
         if ok and v:
             self.path_label.configure(
-                text=f"✅  World of Tanks gefunden  ·  Version {v}",
+                text=f"✓  World of Tanks gefunden  ·  Version {v}",
                 text_color=GREEN)
         elif ok:
             self.path_label.configure(
-                text="⚠  WoT gefunden, aber res_mods/ fehlt — bitte WoT starten",
-                text_color="#d29922")
+                text="!  WoT gefunden, aber res_mods/ fehlt — bitte WoT starten",
+                text_color="#ff9800")
         else:
             self.path_label.configure(
-                text="✗  WorldOfTanks.exe nicht gefunden",
+                text="✕  WorldOfTanks.exe nicht gefunden",
                 text_color=RED)
 
     def _try_install(self):
         name = self.name_entry.get().strip()
         if not name:
             self.status_label.configure(
-                text="⚠  Bitte deinen WoT-Account-Namen eingeben.",
-                text_color="#d29922")
+                text="!  Bitte deinen WoT-Account-Namen eingeben.",
+                text_color="#ff9800")
             return
         if not os.path.isfile(os.path.join(self._wot_path, "WorldOfTanks.exe")):
             self.status_label.configure(
-                text="✗  WoT-Ordner nicht gefunden. Bitte 'Anderen Ordner' wählen.",
+                text="✕  WoT-Ordner nicht gefunden. Bitte 'Anderen Ordner' waehlen.",
                 text_color=RED)
             return
 
@@ -291,16 +294,15 @@ class App(ctk.CTk):
         self.install_btn.configure(state="normal", text="Jetzt installieren  →")
         if ok:
             self.status_label.configure(
-                text=(f"✅  Fertig! WoT-Version {result}\n\n"
+                text=(f"✓  Fertig! WoT-Version {result}\n\n"
                       f"Starte World of Tanks neu.\n"
-                      f"Spiel eine Runde — der Veranstalter sieht dich dann als \"{name}\"."),
+                      f"Spiel eine Runde — der Veranstalter sieht dich als \"{name}\"."),
                 text_color=GREEN)
-            self.install_btn.configure(text="Fertig ✓", state="disabled",
+            self.install_btn.configure(text="Erledigt ✓", state="disabled",
                                        fg_color=BG2, text_color=GREEN)
         else:
-            self.status_label.configure(text=f"✗  {result}", text_color=RED)
+            self.status_label.configure(text=f"✕  {result}", text_color=RED)
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     App().mainloop()

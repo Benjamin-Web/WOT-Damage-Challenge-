@@ -1,7 +1,7 @@
-# mod_mohjobeist_beastsync.py
-# BeastSync | Mohjo_beist — Community Damage Tracker for World of Tanks
-# Ablageort: World_of_Tanks/mods/  (als mohjobeist_beastsync.wotmod)
-# Config:    World_of_Tanks/res_mods/<version>/mods/beastsync/config.json
+# mod_mohjos_damagerace.py
+# Mohjos DamageRace — Community Damage Tracker for World of Tanks
+# Ablageort: World_of_Tanks/mods/  (als mohjos_damagerace.wotmod)
+# Config:    World_of_Tanks/res_mods/<version>/mods/damagerace/config.json
 
 import os
 import json
@@ -12,11 +12,11 @@ import Avatar
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
-_MOD_NAME = 'BeastSync'
+_MOD_NAME = 'DamageRace'
 
 _CONFIG_PATH = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    '..', '..', 'mods', 'beastsync', 'config.json'
+    '..', '..', 'mods', 'damagerace', 'config.json'
 ))
 
 _DEFAULT_CONFIG = {
@@ -222,7 +222,7 @@ def _hook_onArenaPeriodChange(self, period, *args, **kwargs):
         except Exception as exc:
             BigWorld.logWarning(_MOD_NAME, 'HP-Cache Fehler: %s' % exc, None)
 
-        BigWorld.logInfo(_MOD_NAME, 'Kampf gestartet — BeastSync aktiv.', None)
+        BigWorld.logInfo(_MOD_NAME, 'Kampf gestartet — DamageRace aktiv.', None)
 
     elif period >= _ARENA_PERIOD_AFTERBATTLE:
         _in_battle[0] = False
@@ -236,6 +236,6 @@ Avatar.PlayerAvatar.onArenaPeriodChange = _hook_onArenaPeriodChange
 # ─── INIT ─────────────────────────────────────────────────────────────────────
 
 BigWorld.logInfo(_MOD_NAME,
-    'BeastSync by Mohjo_beist geladen | Server: %s | Spieler: %s'
+    'Mohjos DamageRace geladen | Server: %s | Spieler: %s'
     % (_cfg['server_url'], _cfg['streamer_name']),
     None)

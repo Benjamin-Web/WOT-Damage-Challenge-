@@ -1,146 +1,128 @@
 <div align="center">
 
-# 🐾 BeastSync | Mohjo_beist
-### World of Tanks — Community Damage Challenge Tracker
+# Mohjos DamageRace
+### World of Tanks — Community Damage Race Tracker
 
-[![WoT Mod](https://img.shields.io/badge/WoT-Offizieller%20Mod-green)](https://wgmods.net)
-[![Docker](https://img.shields.io/badge/Server-Docker%20ready-blue?logo=docker)](https://hub.docker.com)
-[![Made by Mohjo_beist](https://img.shields.io/badge/by-Mohjo__beist-red)](https://github.com/Benjamin-Web)
+[![WoT Mod](https://img.shields.io/badge/WoT-Mod-FFD700)](https://wgmods.net)
+[![Docker](https://img.shields.io/badge/Server-Docker%20ready-1e1e28?logo=docker)](https://hub.docker.com)
+[![by Mohjo_beist](https://img.shields.io/badge/by-Mohjo__beist-FFD700)](https://github.com/Benjamin-Web)
 
-**Kein manuelles Abziehen mehr.**
-Jeder Streamer installiert einmal eine Exe — fertig.
-Der Damage-Counter läuft von da an von selbst.
+**Streamer-Wettkampf, automatisch.**
+Events, Teams, Einladungslinks — komplett im Browser steuerbar.
 
 </div>
 
 ---
 
-## Was ist BeastSync?
+## Was ist DamageRace?
 
-BeastSync ist ein von **Mohjo_beist** entwickelter World of Tanks Mod für Community Damage-Challenges. Mehrere Streamer spielen gleichzeitig und arbeiten gemeinsam auf ein Schadensziel hin. Der Counter läuft automatisch — live, für alle sichtbar im OBS-Overlay.
+DamageRace ist ein von **Mohjo_beist** entwickeltes Setup für World-of-Tanks-Community-Events. Mehrere Streamer treten in Teams gegeneinander an oder kooperieren auf ein gemeinsames Schadensziel. Damage wird live gemessen, Counter im OBS-Overlay laufen synchron auf allen Streams.
 
-Alles läuft über unseren eigenen Server. Streamer müssen nichts einrichten außer der Installer-Exe.
-
----
-
-## 📥 Für Streamer — So einfach geht's
-
-> Du bekommst von Mohjo_beist eine Datei: **`DamageChallenge-Install.exe`**
-
-**1.** Doppelklick auf die Exe
-
-**2.** Deinen World of Tanks Account-Namen eingeben
-
-**3.** „Jetzt installieren" klicken
-
-**4.** WoT neu starten — fertig ✅
-
-Der Installer erkennt World of Tanks automatisch und verbindet sich mit dem BeastSync-Server. Kein Python, kein Config-File, nichts weiter nötig.
-
-```
-┌─────────────────────────────────────────────────────┐
-│  🐾 BeastSync Setup                                 │
-│─────────────────────────────────────────────────────│
-│                                                     │
-│  Dein World of Tanks Account-Name                   │
-│  ┌───────────────────────────────────────────────┐  │
-│  │  Mohjo_beist                                  │  │
-│  └───────────────────────────────────────────────┘  │
-│  ⚠  Groß-/Kleinschreibung beachten!                 │
-│                                                     │
-│  ✅  WoT gefunden (Version 1.24.1.0)                │
-│                                                     │
-│                        [Jetzt installieren  →]      │
-└─────────────────────────────────────────────────────┘
-```
+**Drei Säulen:**
+- **WoT-Mod** — misst Damage automatisch und sendet ihn an den Server
+- **Server + Admin-Panel** — Events erstellen, Teams konfigurieren, Invite-Links versenden
+- **OBS-Overlay** — zeigt Gesamt- und Team-Counter live, Glasmorphismus-Design
 
 ---
 
-## 🎛️ Für Mohjo_beist — Admin-Zugang
+## Features
 
-Das Admin-Panel ist passwortgeschützt und läuft komplett im Browser. Kein lokales Programm nötig — auch vom Handy oder Tablet aus bedienbar.
-
-**Admin-Panel:** Wird privat kommuniziert.
-
-Funktionen im Admin-Panel:
-- Schadensziel setzen und zurücksetzen
-- Streamer live hinzufügen oder entfernen
-- Pause / Fortsetzen
-- Live-Log aller Treffer
-
----
-
-## 📺 OBS-Overlay
-
-Die OBS-URL wird von Mohjo_beist vor dem Event an alle Streamer kommuniziert.
-
-**In OBS:**
-1. Quelle hinzufügen → **Browser**
-2. URL einfügen (vom Veranstalter)
-3. Breite `300` · Höhe `80`
-4. Custom CSS: `body { background: transparent !important; }`
+- 🏁 **Event-Wizard** — Name, Ziel, 2-4 Teams, Coop oder Versus
+- 🔗 **Invite-Links** — Pro Event und pro Team, mit einem Klick kopieren
+- 🎯 **Team-Modi** — Kooperativ (gemeinsames Ziel) oder Versus (Wettstreit)
+- 📊 **Live-Overlay** — Team-Farben, Fortschrittsbalken, Glow-Flash bei Damage
+- 🛡 **Login-geschützt** — Admin-Panel nur mit Passwort
+- 🔄 **Idempotenz** — Doppelzählung ausgeschlossen, Retry bei Netzwerkfehler
+- ⚙ **Ein-Klick-Installer** — Streamer geben nur ihren WoT-Namen ein
+- 🎨 **Material-Design-3-UI** — Gold-Akzent, Dark Theme, Glasmorphismus
 
 ---
 
-## 🏗️ Architektur
+## So funktioniert's
 
 ```
-  BeastSync Server (privat gehostet)
-  ┌────────────────────────────────────────┐
-  │                                        │
-  │  GET /status   ◄── OBS Browser Source │◄──── alle Streamer-OBS
-  │  POST /damage  ◄── WoT-Mod (je PC)    │
-  │  GET /admin    ◄── Mohjo_beist (Login)│
-  └────────────────────────────────────────┘
-          ▲                    ▲
-  ┌───────────────┐    ┌───────────────┐
-  │ Streamer 1    │    │ Streamer 2    │  ...
-  │ WoT + Mod     │    │ WoT + Mod     │
-  └───────────────┘    └───────────────┘
+[Streamer-PC: WoT + mohjos_damagerace.wotmod]  ──┐
+[Streamer-PC: WoT + mohjos_damagerace.wotmod]  ──┤──►  [Server (privat gehostet)]  ──►  [OBS-Overlay aller Streamer]
+[Streamer-PC: WoT + mohjos_damagerace.wotmod]  ──┘            ▲
+                                                              │
+                                              [Admin-Panel im Browser]
 ```
+
+**Workflow:**
+1. **Admin** öffnet `/admin`, erstellt ein Event mit Teams.
+2. **Admin** kopiert Team-Invite-Links und schickt sie an Streamer.
+3. **Streamer** öffnet Link → gibt WoT-Namen ein → wird Team zugeordnet.
+4. **Streamer** installiert die Exe (einmalig) mit demselben Namen.
+5. **OBS** lädt `/overlay` als Browser-Source.
+6. Spiel läuft — Damage wird automatisch gezählt und sichtbar.
 
 ---
 
-## 🛡️ WoT Regelkonformität
+## Setup
 
-| Kriterium | Status |
-|-----------|--------|
-| Offizielles `.wotmod`-Format | ✅ |
-| Offizielle BigWorld Python API | ✅ |
-| Spielvorteil | ❌ Keiner |
-| Liest fremde Spieler-Daten | ❌ Nein — nur eigener Damage |
-| WoT Fair Play Policy | ✅ Erfüllt |
+### Server (für den Veranstalter)
+
+```bash
+git clone https://github.com/Benjamin-Web/WOT-Damage-Challenge-.git
+cd WOT-Damage-Challenge-
+```
+
+`server/config.py` editieren (Passwörter setzen!) oder Env-Variablen verwenden:
+```yaml
+# docker-compose.yml
+environment:
+  ADMIN_SECRET: "dein-passwort"
+  SESSION_SECRET: "lang-zufaellig"
+  PUBLIC_BASE_URL: "http://deine-ip:5000"
+```
+
+```bash
+docker compose up -d
+```
+
+Admin-Panel: `http://<deine-ip>:5000/admin` (Login mit `ADMIN_SECRET`)
+
+### Mod-Build (einmalig)
+
+Voraussetzung: Python 2.7 (für den `.wotmod`) und Python 3 + PyInstaller (für die Exe).
+
+```bash
+python2.7 mod/build_wotmod.py   # erzeugt dist/mohjos_damagerace.wotmod
+python build_exe.py             # erzeugt dist/DamageRace-Install.exe
+```
+
+### Streamer
+
+1. Invite-Link öffnen, WoT-Namen eingeben.
+2. `DamageRace-Install.exe` herunterladen, starten, WoT-Namen eingeben.
+3. World of Tanks starten — Damage wird automatisch gezählt.
 
 ---
 
-## 📁 Projektstruktur
+## Architektur
 
-```
-WOT-Damage-Challenge-/
-├── installer_config.json        ← Server-Verbindung (privat)
-├── installer_gui.py             ← Streamer-Installer
-├── build_exe.py                 ← Baut Installer.exe
-├── Dockerfile / docker-compose.yml
-│
-├── mod/
-│   ├── mod_mohjobeist_beastsync.py   ← WoT Mod
-│   └── build_wotmod.py
-│
-├── server/
-│   ├── server.py / state.py / config.py
-│
-└── overlay/
-    ├── index.html    ← OBS Browser Source
-    ├── admin.html    ← Admin-Panel
-    └── login.html    ← Login
-```
+- `mod/` — WoT-Mod (Python 2.7, BigWorld-API, Dual-Hook auf `showShotResults` + `updateVehicleHealth`)
+- `server/` — Flask + Flask-Session, thread-safe State, UUID-Idempotenz
+- `overlay/` — Login, Admin, Overlay, Join-Page (alle Vanilla JS, M3-Design)
+- `installer_gui.py` — CustomTkinter-Setup, baked-in Server-URL
+- `Dockerfile` + `docker-compose.yml` — VPS-Deployment
+
+---
+
+## Tech
+
+| Komponente | Stack |
+|---|---|
+| WoT-Mod | Python 2.7, BigWorld API |
+| Server | Python 3.11, Flask, flask-cors, Flask-Session |
+| Frontend | Vanilla JS, Inter Font, Material Design 3 |
+| Installer | CustomTkinter, PyInstaller (onefile) |
+| Deployment | Docker, docker-compose |
 
 ---
 
 <div align="center">
 
-Entwickelt von **[Mohjo_beist](https://github.com/Benjamin-Web)** für die WoT Streaming Community
-
-*"Einfach spielen. Der Rest läuft von selbst."*
+Made by **Mohjo_beist** · Twitch Streamer Community Project
 
 </div>

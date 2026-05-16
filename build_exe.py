@@ -1,5 +1,5 @@
 """
-build_exe.py — Baut DamageChallenge-Install.exe mit PyInstaller.
+build_exe.py — Baut DamageRace-Install.exe mit PyInstaller.
 
 Voraussetzungen:
     pip install pyinstaller flask flask-cors customtkinter
@@ -7,7 +7,7 @@ Voraussetzungen:
 Aufruf:
     python build_exe.py
 
-Ergebnis: dist/DamageChallenge-Install.exe
+Ergebnis: dist/DamageRace-Install.exe
 """
 
 import os
@@ -31,29 +31,29 @@ def clean():
         p = os.path.join(ROOT, d)
         if os.path.isdir(p):
             shutil.rmtree(p)
-    for spec in ["DamageChallenge-Install.spec"]:
+    for spec in ["DamageRace-Install.spec"]:
         p = os.path.join(ROOT, spec)
         if os.path.isfile(p):
             os.remove(p)
 
 
 def build_installer():
-    wotmod = os.path.join(ROOT, "dist", "mohjobeist_beastsync.wotmod")
+    wotmod = os.path.join(ROOT, "dist", "mohjos_damagerace.wotmod")
     if not os.path.isfile(wotmod):
-        print("WARNUNG: dist/mohjobeist_beastsync.wotmod fehlt.")
-        print("         Zuerst ausführen: python2.7 mod/build_wotmod.py")
+        print("WARNUNG: dist/mohjos_damagerace.wotmod fehlt.")
+        print("         Zuerst ausfuehren: python2.7 mod/build_wotmod.py")
         os.makedirs(os.path.join(ROOT, "dist"), exist_ok=True)
-        open(wotmod, "wb").close()  # Platzhalter
+        open(wotmod, "wb").close()
 
-    sep = os.pathsep  # ; auf Windows, : auf Linux
+    sep = os.pathsep
 
     run([
         sys.executable, "-m", "PyInstaller",
         "--onefile",
         "--windowed",
-        "--name",      "DamageChallenge-Install",
+        "--name",      "DamageRace-Install",
         "--add-data",  f"installer_config.json{sep}.",
-        "--add-data",  f"dist/mohjobeist_beastsync.wotmod{sep}dist",
+        "--add-data",  f"dist/mohjos_damagerace.wotmod{sep}dist",
         "--hidden-import", "customtkinter",
         "--hidden-import", "PIL",
         "--hidden-import", "PIL._tkinter_finder",
@@ -63,10 +63,10 @@ def build_installer():
 
 
 if __name__ == "__main__":
-    print("=== BeastSync — Installer Build ===")
+    print("=== Mohjos DamageRace — Installer Build ===")
     clean()
     os.makedirs(os.path.join(ROOT, "dist"), exist_ok=True)
     build_installer()
     clean()
     print("\n=== FERTIG ===")
-    print("dist/DamageChallenge-Install.exe  ← an Streamer verteilen")
+    print("dist/DamageRace-Install.exe  <- an Streamer verteilen")

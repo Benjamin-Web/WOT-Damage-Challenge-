@@ -1,0 +1,284 @@
+/* ============================================
+   MOHJOS DAMAGERACE — Brand System
+   Aligned mit Heist Bot (Material Design 3, Gold)
+   ============================================ */
+
+:root {
+  /* Primary - Gold */
+  --md3-primary: #ffd700;
+  --md3-on-primary: #000000;
+  --md3-primary-container: rgba(255, 215, 0, 0.12);
+  --md3-on-primary-container: #ffe082;
+  --md3-primary-hover: #ffdf33;
+  --md3-primary-focus: rgba(255, 215, 0, 0.25);
+
+  /* Secondary - Teal */
+  --md3-secondary: #03dac6;
+  --md3-on-secondary: #000000;
+  --md3-secondary-container: rgba(3, 218, 198, 0.12);
+
+  /* Tertiary - Amber */
+  --md3-tertiary: #efb700;
+
+  /* Status */
+  --md3-error: #f2b8b5;
+  --md3-error-strong: #cf6679;
+  --md3-error-container: rgba(207, 102, 121, 0.15);
+  --md3-success: #00e676;
+  --md3-success-container: rgba(0, 230, 118, 0.12);
+  --md3-warning: #ff9800;
+
+  /* Surfaces */
+  --md3-surface: #12121a;
+  --md3-surface-dim: #0d0d14;
+  --md3-surface-bright: #1e1e28;
+  --md3-surface-container: #17171f;
+  --md3-surface-container-high: #1e1e28;
+  --md3-surface-container-highest: #262631;
+  --md3-surface-tint: rgba(255, 215, 0, 0.05);
+  --md3-surface-tint-hover: rgba(255, 215, 0, 0.08);
+
+  /* Outline */
+  --md3-outline: rgba(255, 255, 255, 0.1);
+  --md3-outline-variant: rgba(255, 255, 255, 0.05);
+  --md3-outline-hover: rgba(255, 255, 255, 0.2);
+
+  /* Shadows */
+  --md3-shadow-1: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.25);
+  --md3-shadow-2: 0 2px 4px rgba(0,0,0,0.3), 0 4px 8px rgba(0,0,0,0.2);
+  --md3-shadow-3: 0 4px 8px rgba(0,0,0,0.35), 0 8px 16px rgba(0,0,0,0.2);
+  --md3-shadow-4: 0 6px 10px rgba(0,0,0,0.35), 0 12px 24px rgba(0,0,0,0.2);
+  --md3-shadow-glow: 0 0 24px rgba(255, 215, 0, 0.15);
+
+  /* Radius */
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 24px;
+  --r-full: 999px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emph: cubic-bezier(0.3, 0, 0.4, 1);
+
+  /* Text */
+  --text-primary: #f3f4f6;
+  --text-muted: #9ca3af;
+  --text-dim: #6b7280;
+
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* === Base === */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  background: var(--md3-surface-dim);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.page::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(255, 215, 0, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(255, 215, 0, 0.025) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.brand-logo {
+  display: inline-flex; align-items: center; gap: 10px;
+  font-weight: 800; font-size: 18px;
+  letter-spacing: -0.3px;
+}
+.brand-logo .mark {
+  width: 32px; height: 32px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(135deg, #ffd700 0%, #efb700 100%);
+  display: flex; align-items: center; justify-content: center;
+  color: #000; font-weight: 900; font-size: 16px;
+  box-shadow: var(--md3-shadow-glow);
+}
+.brand-logo .name { color: var(--md3-primary); }
+.brand-logo .sub  { color: var(--text-muted); font-weight: 500; font-size: 13px; }
+
+/* === Cards === */
+
+.card {
+  background: var(--md3-surface-container);
+  border: 1px solid var(--md3-outline);
+  border-radius: var(--r-lg);
+  padding: 20px;
+  box-shadow: var(--md3-shadow-2);
+  transition: border-color 0.2s var(--ease-standard);
+}
+.card:hover { border-color: var(--md3-outline-hover); }
+
+.card-title {
+  display: flex; align-items: center; gap: 10px;
+  margin: 0 0 16px;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--md3-primary);
+}
+
+/* === Form === */
+
+label {
+  display: block;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+input[type="text"], input[type="number"], input[type="password"], select {
+  width: 100%;
+  background: var(--md3-surface-dim);
+  border: 1px solid var(--md3-outline);
+  color: var(--text-primary);
+  border-radius: var(--r-sm);
+  padding: 12px 14px;
+  font-family: var(--font-ui); font-size: 14px;
+  transition: border-color 0.2s var(--ease-standard),
+              box-shadow   0.2s var(--ease-standard);
+}
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--md3-primary);
+  box-shadow: 0 0 0 4px var(--md3-primary-focus);
+}
+input::placeholder { color: var(--text-dim); }
+
+/* === Buttons === */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border: 0; cursor: pointer;
+  padding: 12px 18px;
+  font-family: var(--font-ui); font-weight: 600; font-size: 14px;
+  border-radius: var(--r-sm);
+  transition: all 0.2s var(--ease-standard);
+  text-decoration: none;
+}
+.btn-primary {
+  background: var(--md3-primary); color: #000;
+  box-shadow: var(--md3-shadow-1);
+}
+.btn-primary:hover {
+  background: var(--md3-primary-hover);
+  box-shadow: var(--md3-shadow-2), var(--md3-shadow-glow);
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  background: var(--md3-surface-container-high);
+  color: var(--text-primary);
+  border: 1px solid var(--md3-outline);
+}
+.btn-secondary:hover {
+  background: var(--md3-surface-container-highest);
+  border-color: var(--md3-outline-hover);
+}
+.btn-warn {
+  background: rgba(255, 152, 0, 0.15);
+  color: var(--md3-warning);
+  border: 1px solid rgba(255, 152, 0, 0.3);
+}
+.btn-warn:hover { background: rgba(255, 152, 0, 0.25); }
+.btn-danger {
+  background: var(--md3-error-container);
+  color: var(--md3-error-strong);
+  border: 1px solid rgba(207, 102, 121, 0.3);
+}
+.btn-danger:hover { background: rgba(207, 102, 121, 0.25); }
+.btn-icon { padding: 8px 10px; }
+.btn-block { width: 100%; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* === Status Dot === */
+
+.pulse-dot {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--md3-success);
+}
+.pulse-dot::before {
+  content: '';
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--md3-success);
+  box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.6);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.6); }
+  70%  { box-shadow: 0 0 0 8px rgba(0, 230, 118, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+}
+
+/* === Toast === */
+
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--md3-surface-container-highest);
+  border: 1px solid var(--md3-outline-hover);
+  border-radius: var(--r-md);
+  padding: 14px 18px;
+  font-size: 13px; font-weight: 500;
+  box-shadow: var(--md3-shadow-4);
+  z-index: 1000;
+  animation: toastIn 0.3s var(--ease-emph);
+}
+.toast.ok    { border-left: 3px solid var(--md3-success); }
+.toast.err   { border-left: 3px solid var(--md3-error-strong); }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* === Badges === */
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.3px;
+  border-radius: var(--r-full);
+}
+.badge.success { background: var(--md3-success-container); color: var(--md3-success); }
+.badge.mute    { background: var(--md3-outline-variant); color: var(--text-muted); }
+.badge.warn    { background: rgba(255, 152, 0, 0.15); color: var(--md3-warning); }
+
+/* === Tables === */
+
+table {
+  width: 100%; border-collapse: collapse;
+}
+th, td {
+  padding: 12px 14px; text-align: left;
+  border-bottom: 1px solid var(--md3-outline-variant);
+}
+th {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-muted);
+}
+tr:hover td { background: var(--md3-surface-tint); }
+
+/* === Utility === */
+
+.row { display: flex; gap: 12px; align-items: center; }
+.row.gap-sm { gap: 6px; }
+.col { display: flex; flex-direction: column; gap: 12px; }
+.spacer { flex: 1; }
+.mono { font-family: 'JetBrains Mono', Consolas, monospace; }
+.hidden { display: none !important; }

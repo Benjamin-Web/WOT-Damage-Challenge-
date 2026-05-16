@@ -1,5 +1,5 @@
 """
-build_wotmod.py — Baut mohjobeist_beastsync.wotmod
+build_wotmod.py — Baut mohjos_damagerace.wotmod
 
 Voraussetzung: Python 2.7 muss installiert sein.
 Aufruf: python2.7 build_wotmod.py
@@ -13,10 +13,10 @@ import shutil
 import tempfile
 
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-SOURCE_PY     = os.path.join(SCRIPT_DIR, 'mod_mohjobeist_beastsync.py')
+SOURCE_PY     = os.path.join(SCRIPT_DIR, 'mod_mohjos_damagerace.py')
 DIST_DIR      = os.path.join(SCRIPT_DIR, '..', 'dist')
-OUTPUT        = os.path.join(DIST_DIR, 'mohjobeist_beastsync.wotmod')
-INTERNAL_PATH = 'res/scripts/client/gui/mods/mod_mohjobeist_beastsync.pyc'
+OUTPUT        = os.path.join(DIST_DIR, 'mohjos_damagerace.wotmod')
+INTERNAL_PATH = 'res/scripts/client/gui/mods/mod_mohjos_damagerace.pyc'
 
 
 def build():
@@ -29,7 +29,7 @@ def build():
         print('')
 
     tmp_dir  = tempfile.mkdtemp()
-    pyc_path = os.path.join(tmp_dir, 'mod_mohjobeist_beastsync.pyc')
+    pyc_path = os.path.join(tmp_dir, 'mod_mohjos_damagerace.pyc')
 
     try:
         print('Kompiliere %s ...' % SOURCE_PY)
@@ -46,9 +46,9 @@ def build():
 
         print('')
         print('Fertig! Naechste Schritte:')
-        print('  1. dist/mohjobeist_beastsync.wotmod  →  World_of_Tanks/mods/')
+        print('  1. dist/mohjos_damagerace.wotmod  ->  World_of_Tanks/mods/')
         print('  2. Config-Vorlage (mod/config.example.json) kopieren nach:')
-        print('     World_of_Tanks/res_mods/<version>/mods/beastsync/config.json')
+        print('     World_of_Tanks/res_mods/<version>/mods/damagerace/config.json')
 
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

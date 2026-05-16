@@ -2,107 +2,176 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
+  <title>Mohjos DamageRace — Overlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800;900&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
     body {
       background: transparent;
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
       overflow: hidden;
+      color: #fff;
       display: inline-block;
     }
 
+    /* ── Widget Wrapper ── */
     .widget {
       position: relative;
       display: inline-flex;
       flex-direction: column;
-      gap: 0;
-      padding: 12px 20px 14px;
-      background: rgba(13, 17, 23, 0.82);
-      border: 1px solid rgba(255, 224, 51, 0.18);
-      border-radius: 10px;
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      min-width: 210px;
+      gap: 10px;
+      padding: 14px 18px 16px;
+      background: rgba(13, 13, 20, 0.86);
+      border: 1px solid rgba(255, 215, 0, 0.22);
+      border-radius: 14px;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      min-width: 260px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     }
-
-    /* Accent-Linie oben */
     .widget::before {
       content: '';
       position: absolute;
-      top: 0; left: 16px; right: 16px;
+      top: 0; left: 18px; right: 18px;
       height: 2px;
-      background: linear-gradient(90deg, transparent, #ffe033, transparent);
+      background: linear-gradient(90deg, transparent, #ffd700, transparent);
       border-radius: 0 0 2px 2px;
     }
 
-    .label {
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 2.5px;
-      text-transform: uppercase;
-      color: rgba(255, 224, 51, 0.7);
-      margin-bottom: 3px;
+    /* ── Header ── */
+    .head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+    }
+    .head-left {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .mark {
+      width: 22px; height: 22px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, #ffd700, #efb700);
+      display: flex; align-items: center; justify-content: center;
+      color: #000; font-weight: 900; font-size: 12px;
+    }
+    .ev-name {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 1.8px; text-transform: uppercase;
+      color: rgba(255, 215, 0, 0.85);
+    }
+    .ev-name .sub {
+      color: rgba(255,255,255,0.45);
+      font-weight: 500; letter-spacing: 0.5px;
+      margin-left: 6px;
     }
 
+    /* ── Global Counter ── */
+    .global .label {
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 2.5px; text-transform: uppercase;
+      color: rgba(255,255,255,0.55);
+      margin-bottom: 2px;
+    }
     .value {
-      font-size: 38px;
-      font-weight: 900;
-      color: #ffffff;
-      line-height: 1;
-      letter-spacing: -1px;
-      text-shadow: 0 2px 16px rgba(0,0,0,.8);
+      font-size: 40px; font-weight: 900;
+      line-height: 1; letter-spacing: -1.2px;
+      text-shadow: 0 2px 14px rgba(0,0,0,.8);
       transition: color 0.3s ease;
     }
+    .value.flash { color: #ffd700; }
 
-    .value.flash { color: #ffe033; }
-
-    /* Fortschrittsbalken */
-    .prog-track {
+    .prog {
       margin-top: 8px;
-      height: 3px;
-      background: rgba(255,255,255,.08);
-      border-radius: 3px;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
       overflow: hidden;
     }
     .prog-fill {
       height: 100%;
-      background: linear-gradient(90deg, #ffe033, #ffb700);
-      border-radius: 3px;
+      background: linear-gradient(90deg, #ffd700, #efb700);
+      border-radius: 4px;
       transition: width 0.6s ease;
     }
 
-    /* Ziel-erreicht */
-    .done-banner {
-      display: none;
-      margin-top: 6px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
-      color: #3fb950;
-      text-transform: uppercase;
+    /* ── Teams ── */
+    .teams {
+      display: flex; flex-direction: column; gap: 7px;
+      margin-top: 4px;
+    }
+    .team-row {
+      display: grid;
+      grid-template-columns: 12px 1fr auto;
+      gap: 8px; align-items: center;
+    }
+    .team-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .team-bar {
+      position: relative;
+      height: 14px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .team-bar-fill {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      transition: width 0.6s ease;
+      border-radius: 4px;
+    }
+    .team-name {
+      position: absolute; left: 8px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.8px;
+      color: rgba(255,255,255,0.95);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+      mix-blend-mode: difference;
+      pointer-events: none;
+    }
+    .team-dmg {
+      font-size: 12px; font-weight: 700;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+      min-width: 56px; text-align: right;
     }
 
-    .paused-banner {
+    /* ── Banners ── */
+    .banner {
       display: none;
-      margin-top: 6px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
-      color: rgba(248,81,73,.9);
-      text-transform: uppercase;
+      margin-top: 4px;
+      padding: 4px 0;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      text-align: center;
+      border-top: 1px solid rgba(255,255,255,0.08);
     }
+    .banner.done   { color: #00e676; }
+    .banner.paused { color: #ff9800; }
   </style>
 </head>
 <body>
   <div class="widget" id="widget">
-    <div class="label">Restdamage</div>
-    <div class="value" id="val">–––.–––</div>
-    <div class="prog-track">
-      <div class="prog-fill" id="prog" style="width:0%"></div>
+    <div class="head">
+      <div class="head-left">
+        <div class="mark">M</div>
+        <div class="ev-name" id="evname">DamageRace<span class="sub" id="evsub"></span></div>
+      </div>
     </div>
-    <div class="done-banner"   id="done">✓ Ziel erreicht!</div>
-    <div class="paused-banner" id="paused">⏸ Pause</div>
+
+    <div class="global">
+      <div class="label">Restdamage</div>
+      <div class="value" id="val">–––.–––</div>
+      <div class="prog"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+    </div>
+
+    <div class="teams" id="teams"></div>
+
+    <div class="banner done"   id="done">✓ Ziel erreicht!</div>
+    <div class="banner paused" id="paused">⏸ Pause</div>
   </div>
 
   <script>
@@ -110,33 +179,53 @@
     let lastVal = null;
     let flashTimer = null;
 
-    const valEl    = document.getElementById('val');
-    const progEl   = document.getElementById('prog');
-    const doneEl   = document.getElementById('done');
-    const pausedEl = document.getElementById('paused');
-
-    function fmt(n) {
-      return Math.max(0, Math.round(n)).toLocaleString('de-DE');
-    }
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n) => Math.max(0, Math.round(n)).toLocaleString('de-DE');
 
     async function poll() {
       try {
         const d = await (await fetch('/status')).json();
-        const rem   = d.remaining;
-        const goal  = d.goal;
-        const done  = rem <= 0;
-        const pct   = goal > 0 ? Math.min(100, (goal - rem) / goal * 100) : 0;
+        const ev = d.event || {};
+        const rem  = ev.remaining;
+        const goal = ev.goal;
+        const done = rem <= 0;
+        const pct  = goal > 0 ? Math.min(100, (goal - rem) / goal * 100) : 0;
 
+        // Event-Name
+        $('evname').firstChild.nodeValue = ev.name || 'DamageRace';
+        $('evsub').textContent = ev.mode === 'versus' ? ' · Versus' : (ev.mode === 'coop' ? ' · Coop' : '');
+
+        // Global value
         if (lastVal !== null && rem !== lastVal) {
           clearTimeout(flashTimer);
-          valEl.classList.add('flash');
-          flashTimer = setTimeout(() => valEl.classList.remove('flash'), 600);
+          $('val').classList.add('flash');
+          flashTimer = setTimeout(() => $('val').classList.remove('flash'), 600);
         }
+        $('val').textContent = fmt(rem);
+        $('prog').style.width = pct + '%';
 
-        valEl.textContent          = fmt(rem);
-        progEl.style.width         = pct + '%';
-        doneEl.style.display       = done           ? 'block' : 'none';
-        pausedEl.style.display     = d.paused && !done ? 'block' : 'none';
+        // Teams
+        const teams = d.teams || [];
+        const teamsEl = $('teams');
+        teamsEl.innerHTML = '';
+        teams.forEach(t => {
+          const teamGoal = ev.mode === 'versus' ? goal : Math.max(goal, t.damage);
+          const teamPct  = teamGoal > 0 ? Math.min(100, t.damage / teamGoal * 100) : 0;
+          const row = document.createElement('div');
+          row.className = 'team-row';
+          row.innerHTML = `
+            <div class="team-dot" style="background:${t.color};color:${t.color}"></div>
+            <div class="team-bar">
+              <div class="team-bar-fill" style="width:${teamPct}%;background:linear-gradient(90deg, ${t.color}cc, ${t.color})"></div>
+              <div class="team-name">${t.name}</div>
+            </div>
+            <div class="team-dmg">${fmt(t.damage)}</div>
+          `;
+          teamsEl.appendChild(row);
+        });
+
+        $('done').style.display   = done ? 'block' : 'none';
+        $('paused').style.display = ev.paused && !done ? 'block' : 'none';
         lastVal = rem;
       } catch (_) {}
     }

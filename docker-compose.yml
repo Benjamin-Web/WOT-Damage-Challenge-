@@ -1,10 +1,16 @@
 services:
-  beastsync:
+  damagerace:
     build: .
-    container_name: beastsync
+    container_name: damagerace
     restart: unless-stopped
     ports:
       - "5000:5000"
+    environment:
+      # Wird in Admin-Panel als Invite-Link-Basis verwendet
+      PUBLIC_BASE_URL: "http://109.123.244.109:5000"
+      # Setze deine eigenen Werte oder lass diese stehen
+      # (config.py wird gemountet, also kannst du auch dort editieren)
+      # ADMIN_SECRET: "dein-passwort"
+      # SESSION_SECRET: "lang-zufaellig-string"
     volumes:
-      # Damit config.py editierbar bleibt ohne Image-Rebuild
       - ./server/config.py:/app/server/config.py:ro

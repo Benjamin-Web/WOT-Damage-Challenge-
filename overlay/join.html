@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mohjos DamageRace — Beitreten</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/brand.css">
+  <style>
+    body.page {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .join-card {
+      position: relative;
+      width: 100%; max-width: 460px;
+      background: var(--md3-surface-container);
+      border: 1px solid var(--md3-outline);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      box-shadow: var(--md3-shadow-4), var(--md3-shadow-glow);
+      z-index: 1;
+    }
+    .join-top {
+      position: relative;
+      padding: 36px 32px 24px;
+      text-align: center;
+      background:
+        radial-gradient(ellipse at top, var(--accent-tint, rgba(255, 215, 0, 0.08)) 0%, transparent 70%),
+        var(--md3-surface-container-high);
+      border-bottom: 1px solid var(--md3-outline);
+    }
+    .logo-mark {
+      width: 56px; height: 56px;
+      margin: 0 auto 14px;
+      border-radius: var(--r-md);
+      background: linear-gradient(135deg, var(--accent, #ffd700), var(--accent-dark, #efb700));
+      display: flex; align-items: center; justify-content: center;
+      color: #000; font-weight: 900; font-size: 28px;
+      box-shadow: var(--md3-shadow-3);
+    }
+    .ev-label {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .ev-name {
+      font-size: 22px; font-weight: 800;
+      letter-spacing: -0.4px;
+    }
+    .team-pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-top: 12px;
+      padding: 6px 14px;
+      background: rgba(255, 215, 0, 0.12);
+      border: 1px solid rgba(255, 215, 0, 0.3);
+      border-radius: var(--r-full);
+      font-size: 13px; font-weight: 700;
+    }
+    .team-pill .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .join-body { padding: 28px 32px 32px; }
+    .err-box {
+      display: none;
+      margin-top: 14px;
+      padding: 10px 14px;
+      background: var(--md3-error-container);
+      border: 1px solid rgba(207, 102, 121, 0.3);
+      border-radius: var(--r-sm);
+      color: var(--md3-error-strong);
+      font-size: 13px;
+    }
+    .ok-box {
+      display: none;
+      margin-top: 14px;
+      padding: 14px;
+      background: var(--md3-success-container);
+      border: 1px solid rgba(0, 230, 118, 0.3);
+      border-radius: var(--r-sm);
+      color: var(--md3-success);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .info-row {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid var(--md3-outline-variant);
+      font-size: 12px; color: var(--text-muted);
+      line-height: 1.6;
+    }
+    .info-row strong { color: var(--md3-primary); }
+    button#btn { margin-top: 18px; }
+    .invalid-screen {
+      text-align: center;
+      padding: 60px 32px;
+    }
+    .invalid-screen .x {
+      font-size: 48px;
+      color: var(--md3-error-strong);
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body class="page">
+  <div class="join-card" id="card">
+    <div id="loading" style="padding: 60px; text-align: center; color: var(--text-muted);">
+      Pruefe Einladungslink…
+    </div>
+  </div>
+
+  <script>
+    const token = window.location.pathname.split('/').pop();
+
+    async function init() {
+      try {
+        const res = await fetch('/api/invite/' + encodeURIComponent(token));
+        const data = await res.json();
+        if (!data.ok) { return showInvalid(); }
+        render(data.kind, data.info);
+      } catch (e) {
+        showInvalid();
+      }
+    }
+
+    function showInvalid() {
+      document.getElementById('card').innerHTML = `
+        <div class="invalid-screen">
+          <div class="x">✕</div>
+          <div style="font-size:18px; font-weight:700;">Einladungslink ungueltig</div>
+          <div style="margin-top:8px; color:var(--text-muted); font-size:13px;">
+            Bitte vom Veranstalter einen neuen Link anfordern.
+          </div>
+        </div>`;
+    }
+
+    function render(kind, info) {
+      const color = info.team_color || '#ffd700';
+      document.documentElement.style.setProperty('--accent', color);
+      document.documentElement.style.setProperty('--accent-dark', color);
+      document.documentElement.style.setProperty('--accent-tint', color.replace(')', ', 0.12)').replace('rgb', 'rgba'));
+
+      const teamPill = kind === 'team'
+        ? `<div class="team-pill" style="background:${color}22; border-color:${color}66; color:${color}">
+             <span class="dot" style="background:${color}; color:${color}"></span>
+             ${escapeHtml(info.team_name)}
+           </div>`
+        : `<div style="margin-top:12px; font-size:13px; color:var(--text-muted);">
+             Allgemeiner Beitritt — Team wird vom Admin zugewiesen
+           </div>`;
+
+      document.getElementById('card').innerHTML = `
+        <div class="join-top">
+          <div class="logo-mark" style="background: linear-gradient(135deg, ${color}, ${color}cc)">M</div>
+          <div class="ev-label">Du wirst eingeladen zu</div>
+          <div class="ev-name">${escapeHtml(info.event_name)}</div>
+          ${teamPill}
+        </div>
+        <div class="join-body">
+          <label for="name">Dein WoT-Account-Name</label>
+          <input type="text" id="name" placeholder="z.B. Mohjo_beist" autofocus>
+          <div class="err-box" id="err"></div>
+          <div class="ok-box"  id="ok"></div>
+          <button id="btn" class="btn btn-primary btn-block" style="background:${color}" onclick="doJoin()">
+            Beitreten
+          </button>
+          <div class="info-row">
+            Nach dem Beitritt installierst du die <strong>DamageRace-Exe</strong> (vom Veranstalter erhalten)
+            mit demselben Namen. Dein Damage wird dann automatisch fuer das Event gezaehlt.
+          </div>
+        </div>`;
+
+      document.getElementById('name').addEventListener('keydown', e => {
+        if (e.key === 'Enter') doJoin();
+      });
+    }
+
+    async function doJoin() {
+      const name = document.getElementById('name').value.trim();
+      const btn  = document.getElementById('btn');
+      const err  = document.getElementById('err');
+      const ok   = document.getElementById('ok');
+      err.style.display = 'none'; ok.style.display = 'none';
+      if (!name) return;
+      btn.disabled = true;
+      btn.textContent = 'Beitreten…';
+      try {
+        const res = await fetch('/api/join', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({token, streamer: name}),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          ok.innerHTML = '✓ ' + escapeHtml(data.message) +
+            '<br><br>Jetzt nur noch die <strong>DamageRace-Exe</strong> mit dem Namen <strong>' +
+            escapeHtml(name) + '</strong> installieren.';
+          ok.style.display = 'block';
+          btn.textContent = 'Erledigt';
+        } else {
+          err.textContent = data.message || data.error || 'Beitritt fehlgeschlagen';
+          err.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Beitreten';
+        }
+      } catch (e) {
+        err.textContent = 'Verbindungsfehler.';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Beitreten';
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+      }[c]));
+    }
+
+    init();
+  </script>
+</body>
+</html>
