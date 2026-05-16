@@ -256,8 +256,9 @@
         <span class="sub" id="ev-name-top">—</span>
       </div>
       <div class="spacer"></div>
+      <div id="user-chip" style="display:flex; align-items:center; gap:10px; padding:6px 12px; background:var(--md3-surface-container-high); border:1px solid var(--md3-outline); border-radius:var(--r-full); font-size:13px; font-weight:600;"></div>
       <span class="pulse-dot">Live</span>
-      <button class="btn btn-secondary" onclick="location.href='/logout'">Abmelden</button>
+      <button class="btn btn-secondary" onclick="location.href='/auth/logout'">Abmelden</button>
     </header>
 
     <div class="stats-grid">
@@ -313,12 +314,23 @@
         </section>
 
         <section class="card">
+          <h2 class="card-title">OBS Browser-Source</h2>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">
+            Diese URL als Browser-Source in OBS hinzufuegen (300x180px, transparent).
+          </div>
+          <div class="invite-row">
+            <span class="url" id="overlay-url">—</span>
+            <button class="copy-btn" onclick="copyText(document.getElementById('overlay-url').textContent)">KOPIEREN</button>
+          </div>
+        </section>
+
+        <section class="card">
           <h2 class="card-title">Anleitung</h2>
           <div style="font-size:12px; color:var(--text-muted); line-height:1.7;">
-            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">1.</strong> Team-Invite-Link an Streamer schicken.</p>
-            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">2.</strong> Streamer oeffnet Link, gibt WoT-Namen ein.</p>
-            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">3.</strong> Streamer installiert <code>DamageRace-Install.exe</code> mit demselben Namen.</p>
-            <p><strong style="color:var(--md3-primary)">4.</strong> OBS-Browser-Source: <code style="color:var(--md3-primary)">/overlay</code></p>
+            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">1.</strong> Team-Invite-Link kopieren, an Streamer schicken.</p>
+            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">2.</strong> Streamer oeffnet <code>DamageRace.exe</code> &rarr; "An Event teilnehmen" &rarr; Code + WoT-Name.</p>
+            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">3.</strong> Exe installiert WoT-Mod automatisch.</p>
+            <p><strong style="color:var(--md3-primary)">4.</strong> OBS Browser-Source mit obiger URL.</p>
           </div>
         </section>
       </div>
@@ -404,15 +416,45 @@
     let latest = null;
     async function refresh() {
       try {
-        const d = await fetchJson('/api/event');
+        const d = await fetchJson('/api/my-event');
+        if (!d.authenticated) { location.href = '/login'; return; }
         latest = d;
+        renderUser(d.user);
+        if (!d.event) { renderEmpty(); return; }
         render(d);
       } catch (_) {}
+    }
+
+    function renderUser(u) {
+      if (!u) return;
+      const el = $('user-chip');
+      el.innerHTML = (u.avatar_url
+        ? '<img src="' + u.avatar_url + '" style="width:24px;height:24px;border-radius:50%">'
+        : '<span style="color:var(--md3-primary)">👤</span>')
+        + '<span>' + escapeHtml(u.display_name) + '</span>';
+    }
+
+    function renderEmpty() {
+      $('ev-name-top').textContent = 'Kein aktives Event';
+      $('s-rest').textContent = '—';
+      $('s-dealt').textContent = '—';
+      $('s-goal').textContent = '—';
+      $('gprog').style.width = '0%';
+      $('ev-url').textContent = '—';
+      $('overlay-url').textContent = '—';
+      $('teams-area').innerHTML =
+        '<div class="empty-state">' +
+        '<div class="ico">🏁</div>' +
+        '<div style="font-weight:700; color:var(--text-primary);">Noch kein Event erstellt</div>' +
+        '<div style="font-size:13px; margin-top:6px;">Klick "Neues Event erstellen" rechts um zu starten.</div>' +
+        '</div>';
+      $('log').innerHTML = '';
     }
 
     function render(d) {
       const ev = d.event;
       $('ev-name-top').textContent = ev.name + ' · ' + (ev.mode === 'versus' ? 'Versus' : 'Coop');
+      $('overlay-url').textContent = ev.overlay_url || '—';
       $('s-rest').textContent  = fmt(ev.remaining);
       $('s-dealt').textContent = fmt(ev.total_dealt);
       $('s-goal').textContent  = fmt(ev.goal);
@@ -546,7 +588,7 @@
         teams: wizardTeams,
       };
       try {
-        const d = await fetchJson('/admin/event', {
+        const d = await fetchJson('/api/event', {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify(payload),
         });
@@ -558,7 +600,7 @@
     async function setGoal() {
       const v = parseInt($('i-goal').value);
       if (!v) return;
-      const d = await fetchJson('/admin/set', {
+      const d = await fetchJson('/api/event/set', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({goal: v}),
       });
@@ -567,7 +609,7 @@
 
     async function togglePause() {
       const paused = !(latest && latest.event && latest.event.paused);
-      await fetchJson('/admin/pause', {
+      await fetchJson('/api/event/pause', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({paused}),
       });
@@ -576,7 +618,7 @@
 
     async function resetEvent() {
       if (!confirm('Wirklich alle Damage-Werte zuruecksetzen?')) return;
-      await fetchJson('/admin/set', {
+      await fetchJson('/api/event/set', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({reset: true}),
       });
@@ -586,7 +628,7 @@
 
     async function regenerate(scope, teamId) {
       if (!confirm('Alten Invite-Link ungueltig machen und neuen erstellen?')) return;
-      const d = await fetchJson('/admin/invite/regenerate', {
+      const d = await fetchJson('/api/event/invite/regenerate', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({scope, team_id: teamId}),
       });

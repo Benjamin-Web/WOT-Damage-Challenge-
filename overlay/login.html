@@ -16,7 +16,7 @@
     }
     .login-card {
       position: relative;
-      width: 100%; max-width: 400px;
+      width: 100%; max-width: 440px;
       background: var(--md3-surface-container);
       border: 1px solid var(--md3-outline);
       border-radius: var(--r-lg);
@@ -25,42 +25,64 @@
       z-index: 1;
     }
     .login-top {
-      padding: 36px 32px 24px;
+      padding: 40px 32px 28px;
       text-align: center;
       background:
-        radial-gradient(ellipse at top, rgba(255, 215, 0, 0.08) 0%, transparent 70%),
+        radial-gradient(ellipse at top, rgba(255, 215, 0, 0.10) 0%, transparent 70%),
         var(--md3-surface-container-high);
       border-bottom: 1px solid var(--md3-outline);
     }
     .logo-mark {
-      width: 56px; height: 56px;
-      margin: 0 auto 14px;
+      width: 64px; height: 64px;
+      margin: 0 auto 16px;
       border-radius: var(--r-md);
       background: linear-gradient(135deg, #ffd700 0%, #efb700 100%);
       display: flex; align-items: center; justify-content: center;
-      color: #000; font-weight: 900; font-size: 28px;
+      color: #000; font-weight: 900; font-size: 32px;
       box-shadow: var(--md3-shadow-3), var(--md3-shadow-glow);
     }
     .login-title {
-      font-size: 22px; font-weight: 800;
+      font-size: 24px; font-weight: 800;
       color: var(--md3-primary);
       letter-spacing: -0.4px;
     }
     .login-sub {
       font-size: 13px; color: var(--text-muted);
-      margin-top: 4px;
+      margin-top: 6px;
     }
-    .login-body { padding: 28px 32px 32px; }
-    .err-box {
-      display: none;
-      margin-top: 14px;
-      padding: 10px 14px;
-      background: var(--md3-error-container);
-      border: 1px solid rgba(207, 102, 121, 0.3);
+    .login-body { padding: 32px; text-align: center; }
+    .twitch-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px 18px;
+      background: #9146ff;
+      color: #fff;
+      border: 0;
       border-radius: var(--r-sm);
-      color: var(--md3-error-strong);
-      font-size: 13px;
+      font-family: var(--font-ui);
+      font-size: 15px; font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s var(--ease-standard);
+      text-decoration: none;
     }
+    .twitch-btn:hover {
+      background: #7d2def;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(145, 70, 255, 0.4);
+    }
+    .twitch-btn svg { width: 22px; height: 22px; fill: #fff; }
+    .info-block {
+      margin-top: 22px;
+      padding: 14px;
+      background: var(--md3-surface-dim);
+      border: 1px solid var(--md3-outline-variant);
+      border-radius: var(--r-sm);
+      font-size: 12px; color: var(--text-muted);
+      line-height: 1.6;
+      text-align: left;
+    }
+    .info-block strong { color: var(--md3-primary); }
     .login-footer {
       text-align: center;
       padding: 14px 32px;
@@ -68,7 +90,6 @@
       font-size: 11px; color: var(--text-dim);
       letter-spacing: 0.5px;
     }
-    button#btn { margin-top: 20px; }
   </style>
 </head>
 <body class="page">
@@ -76,55 +97,21 @@
     <div class="login-top">
       <div class="logo-mark">M</div>
       <div class="login-title">Mohjos DamageRace</div>
-      <div class="login-sub">Veranstalter — Login</div>
+      <div class="login-sub">Veranstalter-Login</div>
     </div>
     <div class="login-body">
-      <label for="pw">Passwort</label>
-      <input type="password" id="pw" placeholder="••••••••••••"
-             autofocus autocomplete="current-password">
-      <div class="err-box" id="err"></div>
-      <button id="btn" class="btn btn-primary btn-block" onclick="doLogin()">Anmelden</button>
+      <a href="/auth/twitch/start" class="twitch-btn">
+        <svg viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
+        Mit Twitch anmelden
+      </a>
+
+      <div class="info-block">
+        <strong>Keine Anmeldung als Streamer noetig.</strong><br>
+        Wenn du nur an einem Event teilnehmen willst, lade die DamageRace-App,
+        gib den Invite-Code deines Veranstalters ein und installier den WoT-Mod.
+      </div>
     </div>
-    <div class="login-footer">Mohjo_beist · Community Damage Race</div>
+    <div class="login-footer">Mohjos DamageRace · Twitch-Login</div>
   </div>
-
-  <script>
-    document.getElementById('pw').addEventListener('keydown', e => {
-      if (e.key === 'Enter') doLogin();
-    });
-
-    async function doLogin() {
-      const pw  = document.getElementById('pw').value;
-      const btn = document.getElementById('btn');
-      const err = document.getElementById('err');
-      if (!pw) return;
-
-      btn.disabled = true;
-      btn.textContent = 'Anmelden…';
-      err.style.display = 'none';
-      try {
-        const res = await fetch('/login', {
-          method: 'POST', credentials: 'include',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({password: pw}),
-        });
-        const data = await res.json();
-        if (data.ok) {
-          window.location.href = '/admin';
-        } else {
-          err.textContent = data.error || 'Falsches Passwort';
-          err.style.display = 'block';
-          document.getElementById('pw').value = '';
-          document.getElementById('pw').focus();
-        }
-      } catch (e) {
-        err.textContent = 'Verbindung zum Server fehlgeschlagen.';
-        err.style.display = 'block';
-      } finally {
-        btn.disabled = false;
-        btn.textContent = 'Anmelden';
-      }
-    }
-  </script>
 </body>
 </html>

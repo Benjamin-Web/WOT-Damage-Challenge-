@@ -20,12 +20,11 @@ _CONFIG_PATH = os.path.normpath(os.path.join(
 ))
 
 _DEFAULT_CONFIG = {
-    'server_url': 'http://192.168.1.100:5000',
-    'streamer_name': 'MeinStreamerName',
+    'server_url': 'http://109.123.244.109:5000',
+    'streamer_token': '',          # Eindeutiger Token vom Server (Multi-Tenant)
+    'streamer_name':  '',          # Fallback fuer Single-Tenant-Mode
     'enabled': True,
     'send_interval_ms': 200,
-    # Arena-Typen die gezaehlt werden: 1=Random, 7=Ranked
-    # Leer lassen [] = alle zaehlen
     'allowed_arena_types': [1, 7],
 }
 
@@ -160,12 +159,13 @@ def _do_send():
         return
     _pending_damage[0] = 0
 
-    url     = _cfg['server_url'].rstrip('/') + '/damage'
-    key     = str(uuid.uuid4())
+    url   = _cfg['server_url'].rstrip('/') + '/damage'
+    key   = str(uuid.uuid4())
+    token = _cfg.get('streamer_token') or _cfg.get('streamer_name') or ''
     payload = json.dumps({
-        'streamer': _cfg['streamer_name'],
-        'damage':   damage,
-        'key':      key,
+        'streamer_token': token,
+        'damage':         damage,
+        'key':            key,
     })
 
     def _on_response(data):
@@ -184,8 +184,8 @@ def _do_send():
                               'Content-Type: application/json\r\n', payload)
         except Exception:
             # Fallback: GET mit Query-Parametern
-            get_url = '%s?streamer=%s&damage=%d&key=%s' % (
-                url, _cfg['streamer_name'], damage, key)
+            get_url = '%s?streamer_token=%s&damage=%d&key=%s' % (
+                url, token, damage, key)
             try:
                 BigWorld.fetchURL(get_url, _on_response)
             except Exception as exc:

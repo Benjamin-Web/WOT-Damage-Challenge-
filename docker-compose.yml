@@ -6,11 +6,12 @@ services:
     ports:
       - "5000:5000"
     environment:
-      # Wird in Admin-Panel als Invite-Link-Basis verwendet
       PUBLIC_BASE_URL: "http://109.123.244.109:5000"
-      # Setze deine eigenen Werte oder lass diese stehen
-      # (config.py wird gemountet, also kannst du auch dort editieren)
-      # ADMIN_SECRET: "dein-passwort"
-      # SESSION_SECRET: "lang-zufaellig-string"
+      # Twitch Client-Secret muss als Env gesetzt sein damit OAuth Code-Flow geht
+      # Auf VPS: nano docker-compose.yml und unten setzen
+      # TWITCH_CLIENT_SECRET: "dein-secret-aus-twitch-dev-console"
+      # Optional: ueberschreibt default-Client-ID
+      # TWITCH_CLIENT_ID: "5ns5vekvgz8wb6wudfsos1nvzsa4sq"
     volumes:
       - ./server/config.py:/app/server/config.py:ro
+      - ./data:/app/data     # SQLite-DB persistent

@@ -182,9 +182,15 @@
     const $ = (id) => document.getElementById(id);
     const fmt = (n) => Math.max(0, Math.round(n)).toLocaleString('de-DE');
 
+    // Slug aus URL extrahieren: /overlay/<slug>
+    const path = window.location.pathname;
+    const slug = path.split('/').filter(Boolean).pop() || '';
+    const STATUS_URL = '/status/' + encodeURIComponent(slug);
+
     async function poll() {
       try {
-        const d = await (await fetch('/status')).json();
+        const d = await (await fetch(STATUS_URL)).json();
+        if (d.error) return;
         const ev = d.event || {};
         const rem  = ev.remaining;
         const goal = ev.goal;

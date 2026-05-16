@@ -193,13 +193,17 @@
       try {
         const res = await fetch('/api/join', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({token, streamer: name}),
+          body: JSON.stringify({token, wot_name: name}),
         });
         const data = await res.json();
         if (data.ok) {
-          ok.innerHTML = '✓ ' + escapeHtml(data.message) +
-            '<br><br>Jetzt nur noch die <strong>DamageRace-Exe</strong> mit dem Namen <strong>' +
-            escapeHtml(name) + '</strong> installieren.';
+          const teamStr = data.team ? ' (Team ' + escapeHtml(data.team.name) + ')' : '';
+          ok.innerHTML = '✓ Beitritt erfolgreich' + teamStr + '!<br><br>' +
+            '<strong>Naechster Schritt:</strong> Lade die <strong>DamageRace.exe</strong> ' +
+            '(<a href="https://github.com/Benjamin-Web/WOT-Damage-Challenge-/releases" target="_blank" style="color:var(--md3-primary);">GitHub Releases</a>), ' +
+            'oeffne sie, klick "An Event teilnehmen" und gib diesen Code ein:<br><br>' +
+            '<code style="display:block; background:var(--md3-surface-dim); padding:10px; border-radius:6px; color:var(--md3-primary); font-size:14px; word-break:break-all;">' +
+            escapeHtml(token) + '</code>';
           ok.style.display = 'block';
           btn.textContent = 'Erledigt';
         } else {
