@@ -60,11 +60,11 @@ def _load_cfg():
         with open(_res("installer_config.json"), "r") as f:
             return json.load(f)
     except Exception:
-        return {"server_url": "http://109.123.244.109:5000",
+        return {"server_url": "https://mohjos-damagerace.duckdns.org",
                 "event_name": "Mohjos DamageRace"}
 
 _CFG       = _load_cfg()
-SERVER_URL = _CFG.get("server_url", "http://109.123.244.109:5000").rstrip("/")
+SERVER_URL = _CFG.get("server_url", "https://mohjos-damagerace.duckdns.org").rstrip("/")
 WOTMOD_SRC = _res(os.path.join("dist", "mohjos_damagerace.wotmod"))
 
 # ─── HTTP-Helper ──────────────────────────────────────────────────────────────

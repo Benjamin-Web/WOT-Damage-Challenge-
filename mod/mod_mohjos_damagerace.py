@@ -20,7 +20,7 @@ _CONFIG_PATH = os.path.normpath(os.path.join(
 ))
 
 _DEFAULT_CONFIG = {
-    'server_url': 'http://109.123.244.109:5000',
+    'server_url': 'https://mohjos-damagerace.duckdns.org',
     'streamer_token': '',          # Eindeutiger Token vom Server (Multi-Tenant)
     'streamer_name':  '',          # Fallback fuer Single-Tenant-Mode
     'enabled': True,

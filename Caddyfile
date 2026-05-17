@@ -1,0 +1,4 @@
+mohjos-damagerace.duckdns.org {
+    encode gzip
+    reverse_proxy damagerace:5000
+}

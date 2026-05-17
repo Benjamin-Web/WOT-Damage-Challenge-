@@ -3,10 +3,10 @@ services:
     build: .
     container_name: damagerace
     restart: unless-stopped
-    ports:
-      - "5000:5000"
+    expose:
+      - "5000"
     environment:
-      PUBLIC_BASE_URL: "http://109.123.244.109:5000"
+      PUBLIC_BASE_URL: "https://mohjos-damagerace.duckdns.org"
       # Twitch Client-Secret muss als Env gesetzt sein damit OAuth Code-Flow geht
       # Auf VPS: nano docker-compose.yml und unten setzen
       # TWITCH_CLIENT_SECRET: "dein-secret-aus-twitch-dev-console"
@@ -15,3 +15,28 @@ services:
     volumes:
       - ./server/config.py:/app/server/config.py:ro
       - ./data:/app/data     # SQLite-DB persistent
+    networks:
+      - web
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+    depends_on:
+      - damagerace
+
+networks:
+  web:
+
+volumes:
+  caddy_data:
+  caddy_config:
