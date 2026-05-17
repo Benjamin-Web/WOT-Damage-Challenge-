@@ -282,3 +282,31 @@ tr:hover td { background: var(--md3-surface-tint); }
 .spacer { flex: 1; }
 .mono { font-family: 'JetBrains Mono', Consolas, monospace; }
 .hidden { display: none !important; }
+
+
+/* ── Language toggle (mounted by i18n.js) ───────────────────────────── */
+.lang-toggle {
+  display: inline-flex;
+  border: 1px solid var(--md3-outline);
+  border-radius: var(--r-full);
+  overflow: hidden;
+  background: var(--md3-surface-container-high);
+}
+.lang-toggle .lang-opt {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 4px 12px;
+  font-family: var(--font-ui, Inter, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.lang-toggle .lang-opt:hover { color: var(--text-primary); }
+.lang-toggle .lang-opt.active {
+  background: var(--md3-primary);
+  color: var(--md3-on-primary);
+}

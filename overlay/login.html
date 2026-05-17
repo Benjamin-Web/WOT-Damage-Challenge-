@@ -13,6 +13,10 @@
       min-height: 100vh;
       display: flex; align-items: center; justify-content: center;
       padding: 24px;
+      position: relative;
+    }
+    .lang-bar {
+      position: fixed; top: 20px; right: 24px; z-index: 5;
     }
     .login-card {
       position: relative;
@@ -41,24 +45,13 @@
       color: #000; font-weight: 900; font-size: 32px;
       box-shadow: var(--md3-shadow-3), var(--md3-shadow-glow);
     }
-    .login-title {
-      font-size: 24px; font-weight: 800;
-      color: var(--md3-primary);
-      letter-spacing: -0.4px;
-    }
-    .login-sub {
-      font-size: 13px; color: var(--text-muted);
-      margin-top: 6px;
-    }
-    .login-body { padding: 32px; text-align: center; }
+    .login-title { font-size: 24px; font-weight: 800; color: var(--md3-primary); letter-spacing: -0.4px; }
+    .login-sub   { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+    .login-body  { padding: 32px; text-align: center; }
     .twitch-btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      gap: 10px;
-      width: 100%;
-      padding: 14px 18px;
-      background: #9146ff;
-      color: #fff;
-      border: 0;
+      display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 14px 18px;
+      background: #9146ff; color: #fff; border: 0;
       border-radius: var(--r-sm);
       font-family: var(--font-ui);
       font-size: 15px; font-weight: 700;
@@ -73,14 +66,12 @@
     }
     .twitch-btn svg { width: 22px; height: 22px; fill: #fff; }
     .info-block {
-      margin-top: 22px;
-      padding: 14px;
+      margin-top: 22px; padding: 14px;
       background: var(--md3-surface-dim);
       border: 1px solid var(--md3-outline-variant);
       border-radius: var(--r-sm);
       font-size: 12px; color: var(--text-muted);
-      line-height: 1.6;
-      text-align: left;
+      line-height: 1.6; text-align: left;
     }
     .info-block strong { color: var(--md3-primary); }
     .login-footer {
@@ -93,25 +84,29 @@
   </style>
 </head>
 <body class="page">
+  <div class="lang-bar" id="lang-bar"></div>
+
   <div class="login-card">
     <div class="login-top">
       <div class="logo-mark">M</div>
       <div class="login-title">Mohjos DamageRace</div>
-      <div class="login-sub">Veranstalter-Login</div>
+      <div class="login-sub" data-i18n="login.subtitle">Veranstalter-Login</div>
     </div>
     <div class="login-body">
       <a href="/auth/twitch/start" class="twitch-btn">
         <svg viewBox="0 0 24 24"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/></svg>
-        Mit Twitch anmelden
+        <span data-i18n="login.with_twitch">Mit Twitch anmelden</span>
       </a>
 
       <div class="info-block">
-        <strong>Keine Anmeldung als Streamer noetig.</strong><br>
-        Wenn du nur an einem Event teilnehmen willst, lade die DamageRace-App,
-        gib den Invite-Code deines Veranstalters ein und installier den WoT-Mod.
+        <strong data-i18n="login.info_title">Keine Anmeldung als Streamer noetig.</strong><br>
+        <span data-i18n="login.info_body">Wenn du nur an einem Event teilnehmen willst, lade die DamageRace-App, gib den Invite-Code deines Veranstalters ein und installier den WoT-Mod.</span>
       </div>
     </div>
-    <div class="login-footer">Mohjos DamageRace · Twitch-Login</div>
+    <div class="login-footer" data-i18n="login.footer">Mohjos DamageRace · Twitch-Login</div>
   </div>
+
+  <script src="/i18n.js"></script>
+  <script>i18n.mountToggle(document.getElementById('lang-bar'));</script>
 </body>
 </html>

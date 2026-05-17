@@ -1,94 +1,99 @@
-"""
-twitch_oauth.py — Twitch OAuth Helper (Authorization Code Flow mit Client-Secret).
+"""Twitch OAuth helpers.
 
-Verwendet die gleiche Client-ID wie der Heist Bot.
-Client-Secret muss in der ENV TWITCH_CLIENT_SECRET stehen (server-only).
-
-Wenn kein Client-Secret gesetzt ist, faellt der Server auf Implicit-Grant zurueck:
-Der Browser oeffnet die Auth-URL, Twitch redirected mit Token im URL-Fragment,
-und eine kleine JS-Seite postet den Token ans Backend.
+Supports the Authorization Code flow when a client secret is configured and
+falls back to the Implicit flow otherwise. Implicit flow requires a small
+JavaScript bridge page to forward the fragment-encoded access token to the
+server (see server.implicit_bridge).
 """
+from __future__ import annotations
+
+import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
-import json
 
-CLIENT_ID     = os.environ.get('TWITCH_CLIENT_ID',
-                               '5ns5vekvgz8wb6wudfsos1nvzsa4sq')  # gleiche wie Heist Bot
-CLIENT_SECRET = os.environ.get('TWITCH_CLIENT_SECRET', '')
-SCOPES        = 'user:read:email'
+CLIENT_ID = os.environ.get(
+    "TWITCH_CLIENT_ID", "5ns5vekvgz8wb6wudfsos1nvzsa4sq",
+)
+CLIENT_SECRET = os.environ.get("TWITCH_CLIENT_SECRET", "")
 
-AUTH_URL = 'https://id.twitch.tv/oauth2/authorize'
-TOKEN_URL = 'https://id.twitch.tv/oauth2/token'
-USERS_URL = 'https://api.twitch.tv/helix/users'
+AUTH_URL = "https://id.twitch.tv/oauth2/authorize"
+TOKEN_URL = "https://id.twitch.tv/oauth2/token"
+USERS_URL = "https://api.twitch.tv/helix/users"
+
+SCOPES = "user:read:email"
+USER_AGENT = "MohjosDamageRace/1.0"
+
+_HTTP_TIMEOUT = 15
 
 
-def has_secret():
+class TwitchError(RuntimeError):
+    """Raised when Twitch returns an error response."""
+
+
+def has_secret() -> bool:
     return bool(CLIENT_SECRET)
 
 
-def build_auth_url(redirect_uri, state, response_type=None):
-    rt = response_type or ('code' if has_secret() else 'token')
-    q = urllib.parse.urlencode({
-        'client_id':     CLIENT_ID,
-        'redirect_uri':  redirect_uri,
-        'response_type': rt,
-        'scope':         SCOPES,
-        'state':         state,
-        'force_verify':  'false',
+def build_auth_url(redirect_uri: str, state: str,
+                   response_type: str | None = None) -> str:
+    response_type = response_type or ("code" if has_secret() else "token")
+    params = urllib.parse.urlencode({
+        "client_id":     CLIENT_ID,
+        "redirect_uri":  redirect_uri,
+        "response_type": response_type,
+        "scope":         SCOPES,
+        "state":         state,
+        "force_verify":  "false",
     })
-    return '{}?{}'.format(AUTH_URL, q)
+    return f"{AUTH_URL}?{params}"
 
 
-UA = 'MohjosDamageRace/1.0 (+https://mohjos-damagerace.duckdns.org)'
-
-
-def _open(req):
-    """urlopen-Wrapper der Fehlertexte mit ausliest (sonst kommt nur HTTP 4xx)."""
+def _open(req: urllib.request.Request):
+    """Open a request and surface Twitch's error body for diagnostics."""
     try:
-        return urllib.request.urlopen(req, timeout=15)
-    except urllib.error.HTTPError as e:
-        body = ''
+        return urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
+    except urllib.error.HTTPError as exc:
         try:
-            body = e.read().decode('utf-8', 'replace')
+            body = exc.read().decode("utf-8", "replace")
         except Exception:
-            pass
-        raise RuntimeError('Twitch {} {}: {}'.format(e.code, e.reason, body[:300]))
+            body = ""
+        raise TwitchError(f"{exc.code} {exc.reason}: {body[:300]}") from exc
+    except urllib.error.URLError as exc:
+        raise TwitchError(str(exc.reason)) from exc
 
 
-def exchange_code(code, redirect_uri):
-    """Authorization Code Flow: tauscht code gegen access_token."""
+def exchange_code(code: str, redirect_uri: str) -> dict:
     data = urllib.parse.urlencode({
-        'client_id':     CLIENT_ID,
-        'client_secret': CLIENT_SECRET,
-        'code':          code,
-        'grant_type':    'authorization_code',
-        'redirect_uri':  redirect_uri,
+        "client_id":     CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "code":          code,
+        "grant_type":    "authorization_code",
+        "redirect_uri":  redirect_uri,
     }).encode()
-    req = urllib.request.Request(TOKEN_URL, data=data, method='POST')
-    req.add_header('User-Agent', UA)
-    req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-    req.add_header('Accept', 'application/json')
-    with _open(req) as r:
-        return json.loads(r.read().decode())
+    req = urllib.request.Request(TOKEN_URL, data=data, method="POST")
+    req.add_header("User-Agent", USER_AGENT)
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    req.add_header("Accept", "application/json")
+    with _open(req) as resp:
+        return json.loads(resp.read().decode())
 
 
-def fetch_user(access_token):
-    """Holt das Twitch-Profil zum Access-Token."""
+def fetch_user(access_token: str) -> dict | None:
     req = urllib.request.Request(USERS_URL)
-    req.add_header('Authorization', 'Bearer ' + access_token)
-    req.add_header('Client-Id', CLIENT_ID)
-    req.add_header('User-Agent', UA)
-    with _open(req) as r:
-        body = json.loads(r.read().decode())
-    data = body.get('data') or []
-    if not data:
+    req.add_header("Authorization", f"Bearer {access_token}")
+    req.add_header("Client-Id", CLIENT_ID)
+    req.add_header("User-Agent", USER_AGENT)
+    with _open(req) as resp:
+        body = json.loads(resp.read().decode())
+    rows = body.get("data") or []
+    if not rows:
         return None
-    u = data[0]
+    row = rows[0]
     return {
-        'twitch_id':    u.get('id'),
-        'twitch_login': u.get('login'),
-        'display_name': u.get('display_name') or u.get('login'),
-        'avatar_url':   u.get('profile_image_url'),
+        "twitch_id":    row.get("id"),
+        "twitch_login": row.get("login"),
+        "display_name": row.get("display_name") or row.get("login"),
+        "avatar_url":   row.get("profile_image_url"),
     }

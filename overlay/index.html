@@ -16,7 +16,6 @@
       display: inline-block;
     }
 
-    /* ── Widget Wrapper ── */
     .widget {
       position: relative;
       display: inline-flex;
@@ -29,7 +28,7 @@
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       min-width: 260px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
     .widget::before {
       content: '';
@@ -40,14 +39,8 @@
       border-radius: 0 0 2px 2px;
     }
 
-    /* ── Header ── */
-    .head {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 12px;
-    }
-    .head-left {
-      display: flex; align-items: center; gap: 8px;
-    }
+    .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .head-left { display: flex; align-items: center; gap: 8px; }
     .mark {
       width: 22px; height: 22px;
       border-radius: 5px;
@@ -61,22 +54,21 @@
       color: rgba(255, 215, 0, 0.85);
     }
     .ev-name .sub {
-      color: rgba(255,255,255,0.45);
+      color: rgba(255, 255, 255, 0.45);
       font-weight: 500; letter-spacing: 0.5px;
       margin-left: 6px;
     }
 
-    /* ── Global Counter ── */
     .global .label {
       font-size: 9px; font-weight: 700;
       letter-spacing: 2.5px; text-transform: uppercase;
-      color: rgba(255,255,255,0.55);
+      color: rgba(255, 255, 255, 0.55);
       margin-bottom: 2px;
     }
     .value {
       font-size: 40px; font-weight: 900;
       line-height: 1; letter-spacing: -1.2px;
-      text-shadow: 0 2px 14px rgba(0,0,0,.8);
+      text-shadow: 0 2px 14px rgba(0, 0, 0, 0.8);
       transition: color 0.3s ease;
     }
     .value.flash { color: #ffd700; }
@@ -84,7 +76,7 @@
     .prog {
       margin-top: 8px;
       height: 4px;
-      background: rgba(255,255,255,0.08);
+      background: rgba(255, 255, 255, 0.08);
       border-radius: 4px;
       overflow: hidden;
     }
@@ -95,11 +87,7 @@
       transition: width 0.6s ease;
     }
 
-    /* ── Teams ── */
-    .teams {
-      display: flex; flex-direction: column; gap: 7px;
-      margin-top: 4px;
-    }
+    .teams { display: flex; flex-direction: column; gap: 7px; margin-top: 4px; }
     .team-row {
       display: grid;
       grid-template-columns: 12px 1fr auto;
@@ -113,7 +101,7 @@
     .team-bar {
       position: relative;
       height: 14px;
-      background: rgba(255,255,255,0.06);
+      background: rgba(255, 255, 255, 0.06);
       border-radius: 4px;
       overflow: hidden;
     }
@@ -127,8 +115,8 @@
       transform: translateY(-50%);
       font-size: 10px; font-weight: 700;
       letter-spacing: 0.8px;
-      color: rgba(255,255,255,0.95);
-      text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+      color: rgba(255, 255, 255, 0.95);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
       mix-blend-mode: difference;
       pointer-events: none;
     }
@@ -139,7 +127,6 @@
       min-width: 56px; text-align: right;
     }
 
-    /* ── Banners ── */
     .banner {
       display: none;
       margin-top: 4px;
@@ -147,14 +134,14 @@
       font-size: 10px; font-weight: 700;
       letter-spacing: 1.5px; text-transform: uppercase;
       text-align: center;
-      border-top: 1px solid rgba(255,255,255,0.08);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
     .banner.done   { color: #00e676; }
     .banner.paused { color: #ff9800; }
   </style>
 </head>
 <body>
-  <div class="widget" id="widget">
+  <div class="widget">
     <div class="head">
       <div class="head-left">
         <div class="mark">M</div>
@@ -163,77 +150,82 @@
     </div>
 
     <div class="global">
-      <div class="label">Restdamage</div>
+      <div class="label" id="lbl-remaining" data-i18n="overlay.remaining">Restschaden</div>
       <div class="value" id="val">–––.–––</div>
       <div class="prog"><div class="prog-fill" id="prog" style="width:0%"></div></div>
     </div>
 
     <div class="teams" id="teams"></div>
 
-    <div class="banner done"   id="done">✓ Ziel erreicht!</div>
-    <div class="banner paused" id="paused">⏸ Pause</div>
+    <div class="banner done"   id="done"   data-i18n="overlay.goal_reached">✓ Ziel erreicht!</div>
+    <div class="banner paused" id="paused" data-i18n="overlay.paused">⏸ Pause</div>
   </div>
 
+  <script src="/i18n.js"></script>
   <script>
     const POLL_MS = 500;
-    let lastVal = null;
+    let lastValue = null;
     let flashTimer = null;
 
-    const $ = (id) => document.getElementById(id);
-    const fmt = (n) => Math.max(0, Math.round(n)).toLocaleString('de-DE');
+    const $ = function (id) { return document.getElementById(id); };
 
-    // Slug aus URL extrahieren: /overlay/<slug>
-    const path = window.location.pathname;
-    const slug = path.split('/').filter(Boolean).pop() || '';
+    function localeForFormat() {
+      return i18n.get() === 'en' ? 'en-US' : 'de-DE';
+    }
+    function fmt(n) {
+      return Math.max(0, Math.round(n)).toLocaleString(localeForFormat());
+    }
+
+    const slug = window.location.pathname.split('/').filter(Boolean).pop() || '';
     const STATUS_URL = '/status/' + encodeURIComponent(slug);
 
     async function poll() {
       try {
-        const d = await (await fetch(STATUS_URL)).json();
-        if (d.error) return;
-        const ev = d.event || {};
-        const rem  = ev.remaining;
-        const goal = ev.goal;
-        const done = rem <= 0;
-        const pct  = goal > 0 ? Math.min(100, (goal - rem) / goal * 100) : 0;
+        const res = await fetch(STATUS_URL);
+        const data = await res.json();
+        if (data.error) return;
 
-        // Event-Name
-        $('evname').firstChild.nodeValue = ev.name || 'DamageRace';
-        $('evsub').textContent = ev.mode === 'versus' ? ' · Versus' : (ev.mode === 'coop' ? ' · Coop' : '');
+        const event = data.event || {};
+        const remaining = event.remaining;
+        const goal = event.goal;
+        const done = remaining <= 0;
+        const percent = goal > 0 ? Math.min(100, (goal - remaining) / goal * 100) : 0;
 
-        // Global value
-        if (lastVal !== null && rem !== lastVal) {
+        $('evname').firstChild.nodeValue = event.name || 'DamageRace';
+        $('evsub').textContent = event.mode === 'versus'
+          ? ' · Versus'
+          : (event.mode === 'coop' ? ' · Coop' : '');
+
+        if (lastValue !== null && remaining !== lastValue) {
           clearTimeout(flashTimer);
           $('val').classList.add('flash');
-          flashTimer = setTimeout(() => $('val').classList.remove('flash'), 600);
+          flashTimer = setTimeout(function () { $('val').classList.remove('flash'); }, 600);
         }
-        $('val').textContent = fmt(rem);
-        $('prog').style.width = pct + '%';
+        $('val').textContent = fmt(remaining);
+        $('prog').style.width = percent + '%';
 
-        // Teams
-        const teams = d.teams || [];
         const teamsEl = $('teams');
         teamsEl.innerHTML = '';
-        teams.forEach(t => {
-          const teamGoal = ev.mode === 'versus' ? goal : Math.max(goal, t.damage);
-          const teamPct  = teamGoal > 0 ? Math.min(100, t.damage / teamGoal * 100) : 0;
+        (data.teams || []).forEach(function (team) {
+          const teamGoal = event.mode === 'versus' ? goal : Math.max(goal, team.damage);
+          const teamPct  = teamGoal > 0 ? Math.min(100, team.damage / teamGoal * 100) : 0;
           const row = document.createElement('div');
           row.className = 'team-row';
-          row.innerHTML = `
-            <div class="team-dot" style="background:${t.color};color:${t.color}"></div>
-            <div class="team-bar">
-              <div class="team-bar-fill" style="width:${teamPct}%;background:linear-gradient(90deg, ${t.color}cc, ${t.color})"></div>
-              <div class="team-name">${t.name}</div>
-            </div>
-            <div class="team-dmg">${fmt(t.damage)}</div>
-          `;
+          row.innerHTML =
+            '<div class="team-dot" style="background:' + team.color + ';color:' + team.color + '"></div>' +
+            '<div class="team-bar">' +
+              '<div class="team-bar-fill" style="width:' + teamPct + '%;' +
+                'background:linear-gradient(90deg, ' + team.color + 'cc, ' + team.color + ')"></div>' +
+              '<div class="team-name">' + team.name + '</div>' +
+            '</div>' +
+            '<div class="team-dmg">' + fmt(team.damage) + '</div>';
           teamsEl.appendChild(row);
         });
 
         $('done').style.display   = done ? 'block' : 'none';
-        $('paused').style.display = ev.paused && !done ? 'block' : 'none';
-        lastVal = rem;
-      } catch (_) {}
+        $('paused').style.display = event.paused && !done ? 'block' : 'none';
+        lastValue = remaining;
+      } catch (_) { /* network errors are non-fatal */ }
     }
 
     poll();

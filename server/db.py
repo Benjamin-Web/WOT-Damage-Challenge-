@@ -1,57 +1,72 @@
-"""
-db.py — SQLite Layer fuer Mohjos DamageRace (Multi-Tenant)
+"""SQLite persistence layer for DamageRace.
 
-Schema:
-  users(twitch_id PK, twitch_login, display_name, created_at)
-  events(id PK, owner_twitch_id FK, name, goal, mode, paused, total_dealt,
-         event_invite_token, created_at)
-  teams(id PK, event_id FK, slug, name, color, damage, invite_token, position)
-  streamers(token PK uuid, event_id FK, team_id FK NULL, wot_name, damage,
-            last_seen, active, created_at)
-  event_log(id PK, event_id FK, t, wot_name, team_id, damage, remaining)
+One database file holds every tenant. The schema enforces:
 
-Ein User hat 0 oder 1 aktives Event (UNIQUE auf events.owner_twitch_id).
+    - one active event per Twitch owner (`UNIQUE(owner_twitch_id)`),
+    - unique slugs for public overlay URLs,
+    - unique invite tokens across events and teams,
+    - unique (event, wot_name) per streamer participation.
+
+The connection helper enables WAL mode and foreign keys, both required for
+the row-level cascades to behave deterministically under concurrent writes.
 """
+from __future__ import annotations
+
+import logging
 import os
+import secrets
 import sqlite3
 import threading
-import secrets
 import time
 from datetime import datetime, timezone
+from typing import Any, Iterable
 
-DB_PATH = os.environ.get('DAMAGERACE_DB',
-                         os.path.join(os.path.dirname(__file__), '..', 'data', 'damagerace.db'))
+log = logging.getLogger(__name__)
+
+DB_PATH = os.environ.get(
+    "DAMAGERACE_DB",
+    os.path.join(os.path.dirname(__file__), "..", "data", "damagerace.db"),
+)
+
+MAX_TEAMS = 4
+MIN_TEAMS = 2
+MAX_DAMAGE_PER_REQUEST = 10_000
+EVENT_LOG_LIMIT = 200
+IDEMPOTENCY_TTL_SECONDS = 60
 
 
-def _now_iso():
-    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _new_token(prefix=''):
+def _new_token(prefix: str = "") -> str:
     return prefix + secrets.token_urlsafe(8)
 
 
-def _new_uuid():
+def _new_uuid() -> str:
     return secrets.token_urlsafe(16)
 
 
 class Database:
-    def __init__(self, path=DB_PATH):
+    def __init__(self, path: str = DB_PATH) -> None:
         self.path = path
         os.makedirs(os.path.dirname(path), exist_ok=True)
         self._lock = threading.RLock()
         self._init_schema()
 
-    def _conn(self):
-        c = sqlite3.connect(self.path, timeout=10)
-        c.row_factory = sqlite3.Row
-        c.execute('PRAGMA journal_mode=WAL')
-        c.execute('PRAGMA foreign_keys=ON')
-        return c
+    # ── Connection ────────────────────────────────────────────────────────────
 
-    def _init_schema(self):
+    def _conn(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.path, timeout=10)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.execute("PRAGMA busy_timeout=5000")
+        return conn
+
+    def _init_schema(self) -> None:
         with self._lock, self._conn() as c:
-            c.executescript('''
+            c.executescript("""
             CREATE TABLE IF NOT EXISTS users (
               twitch_id    TEXT PRIMARY KEY,
               twitch_login TEXT NOT NULL,
@@ -124,326 +139,454 @@ class Database:
             );
 
             CREATE TABLE IF NOT EXISTS idempotency (
-              key       TEXT PRIMARY KEY,
-              created   REAL NOT NULL
+              key      TEXT PRIMARY KEY,
+              created  REAL NOT NULL
             );
 
             CREATE INDEX IF NOT EXISTS idx_streamers_event ON streamers(event_id);
             CREATE INDEX IF NOT EXISTS idx_teams_event     ON teams(event_id);
             CREATE INDEX IF NOT EXISTS idx_log_event       ON event_log(event_id, id DESC);
-            ''')
+            CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+            """)
 
     # ── Users ─────────────────────────────────────────────────────────────────
 
-    def upsert_user(self, twitch_id, twitch_login, display_name, avatar_url=None):
+    def upsert_user(self, twitch_id: str, twitch_login: str,
+                    display_name: str, avatar_url: str | None = None) -> dict | None:
         with self._lock, self._conn() as c:
-            c.execute('''
+            c.execute(
+                """
                 INSERT INTO users (twitch_id, twitch_login, display_name, avatar_url, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(twitch_id) DO UPDATE SET
                   twitch_login = excluded.twitch_login,
                   display_name = excluded.display_name,
                   avatar_url   = excluded.avatar_url
-            ''', (twitch_id, twitch_login, display_name, avatar_url, _now_iso()))
-            return self.get_user(twitch_id)
+                """,
+                (twitch_id, twitch_login, display_name, avatar_url, _now_iso()),
+            )
+        return self.get_user(twitch_id)
 
-    def get_user(self, twitch_id):
+    def get_user(self, twitch_id: str) -> dict | None:
         with self._lock, self._conn() as c:
-            r = c.execute('SELECT * FROM users WHERE twitch_id = ?', (twitch_id,)).fetchone()
-            return dict(r) if r else None
+            row = c.execute(
+                "SELECT * FROM users WHERE twitch_id = ?", (twitch_id,),
+            ).fetchone()
+            return dict(row) if row else None
 
     # ── Sessions ──────────────────────────────────────────────────────────────
 
-    def create_session(self, twitch_id=None, ttl_seconds=30*24*3600):
+    def create_session(self, twitch_id: str | None = None,
+                       ttl_seconds: int = 30 * 24 * 3600) -> str:
         sid = _new_uuid()
         now = time.time()
         with self._lock, self._conn() as c:
-            c.execute('INSERT INTO sessions (id, twitch_id, created_at, expires_at) VALUES (?,?,?,?)',
-                      (sid, twitch_id, str(now), str(now + ttl_seconds)))
+            c.execute(
+                "INSERT INTO sessions (id, twitch_id, created_at, expires_at) "
+                "VALUES (?, ?, ?, ?)",
+                (sid, twitch_id, str(now), str(now + ttl_seconds)),
+            )
         return sid
 
-    def get_session(self, sid):
+    def get_session(self, sid: str | None) -> dict | None:
         if not sid:
             return None
         with self._lock, self._conn() as c:
-            r = c.execute('SELECT * FROM sessions WHERE id = ?', (sid,)).fetchone()
-            if not r:
+            row = c.execute(
+                "SELECT * FROM sessions WHERE id = ?", (sid,),
+            ).fetchone()
+            if not row:
                 return None
-            if float(r['expires_at']) < time.time():
-                c.execute('DELETE FROM sessions WHERE id = ?', (sid,))
+            if float(row["expires_at"]) < time.time():
+                c.execute("DELETE FROM sessions WHERE id = ?", (sid,))
                 return None
-            return dict(r)
+            return dict(row)
 
-    def attach_user_to_session(self, sid, twitch_id):
+    def attach_user_to_session(self, sid: str, twitch_id: str) -> None:
         with self._lock, self._conn() as c:
-            c.execute('UPDATE sessions SET twitch_id = ? WHERE id = ?', (twitch_id, sid))
+            c.execute(
+                "UPDATE sessions SET twitch_id = ? WHERE id = ?",
+                (twitch_id, sid),
+            )
 
-    def delete_session(self, sid):
+    def delete_session(self, sid: str) -> None:
         with self._lock, self._conn() as c:
-            c.execute('DELETE FROM sessions WHERE id = ?', (sid,))
+            c.execute("DELETE FROM sessions WHERE id = ?", (sid,))
+
+    def cleanup_expired_sessions(self) -> int:
+        with self._lock, self._conn() as c:
+            cur = c.execute(
+                "DELETE FROM sessions WHERE expires_at < ?", (str(time.time()),),
+            )
+            return cur.rowcount or 0
 
     # ── OAuth-State ───────────────────────────────────────────────────────────
 
-    def create_oauth_state(self, session_id):
+    def create_oauth_state(self, session_id: str) -> str:
         state = _new_uuid()
         with self._lock, self._conn() as c:
-            c.execute('INSERT INTO oauth_pending (state, session_id, created_at) VALUES (?,?,?)',
-                      (state, session_id, _now_iso()))
+            c.execute(
+                "INSERT INTO oauth_pending (state, session_id, created_at) "
+                "VALUES (?, ?, ?)",
+                (state, session_id, _now_iso()),
+            )
         return state
 
-    def consume_oauth_state(self, state):
+    def consume_oauth_state(self, state: str) -> dict | None:
         with self._lock, self._conn() as c:
-            r = c.execute('SELECT * FROM oauth_pending WHERE state = ?', (state,)).fetchone()
-            if not r:
+            row = c.execute(
+                "SELECT * FROM oauth_pending WHERE state = ?", (state,),
+            ).fetchone()
+            if not row:
                 return None
-            c.execute('DELETE FROM oauth_pending WHERE state = ?', (state,))
-            return dict(r)
+            c.execute("DELETE FROM oauth_pending WHERE state = ?", (state,))
+            return dict(row)
 
     # ── Events ────────────────────────────────────────────────────────────────
 
-    def _slug_for_user(self, twitch_login, c):
-        base = ''.join(ch.lower() for ch in twitch_login if ch.isalnum())[:24] or 'event'
-        cand = base
+    def _slug_for_user(self, twitch_login: str, conn: sqlite3.Connection) -> str:
+        base = "".join(ch.lower() for ch in twitch_login if ch.isalnum())[:24] or "event"
+        candidate = base
         i = 1
-        while c.execute('SELECT 1 FROM events WHERE slug = ?', (cand,)).fetchone():
+        while conn.execute(
+            "SELECT 1 FROM events WHERE slug = ?", (candidate,),
+        ).fetchone():
             i += 1
-            cand = '{}-{}'.format(base, i)
-        return cand
+            candidate = f"{base}-{i}"
+        return candidate
 
-    def get_event_by_owner(self, twitch_id):
+    def get_event_by_owner(self, twitch_id: str) -> dict | None:
         with self._lock, self._conn() as c:
-            r = c.execute('SELECT * FROM events WHERE owner_twitch_id = ?', (twitch_id,)).fetchone()
-            return dict(r) if r else None
+            row = c.execute(
+                "SELECT * FROM events WHERE owner_twitch_id = ?", (twitch_id,),
+            ).fetchone()
+            return dict(row) if row else None
 
-    def get_event_by_slug(self, slug):
+    def get_event_by_slug(self, slug: str) -> dict | None:
         with self._lock, self._conn() as c:
-            r = c.execute('SELECT * FROM events WHERE slug = ?', (slug,)).fetchone()
-            return dict(r) if r else None
+            row = c.execute(
+                "SELECT * FROM events WHERE slug = ?", (slug,),
+            ).fetchone()
+            return dict(row) if row else None
 
-    def get_event_by_id(self, event_id):
+    def get_event_by_id(self, event_id: int) -> dict | None:
         with self._lock, self._conn() as c:
-            r = c.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
-            return dict(r) if r else None
+            row = c.execute(
+                "SELECT * FROM events WHERE id = ?", (event_id,),
+            ).fetchone()
+            return dict(row) if row else None
 
-    def create_or_replace_event(self, owner_twitch_id, name, goal, mode, team_specs, twitch_login=None):
+    def create_or_replace_event(self, owner_twitch_id: str, name: str,
+                                goal: float, mode: str,
+                                team_specs: Iterable[dict[str, Any]],
+                                twitch_login: str | None = None) -> int:
+        teams = list(team_specs)[:MAX_TEAMS]
         with self._lock, self._conn() as c:
-            existing = c.execute('SELECT id FROM events WHERE owner_twitch_id = ?',
-                                 (owner_twitch_id,)).fetchone()
+            existing = c.execute(
+                "SELECT id FROM events WHERE owner_twitch_id = ?",
+                (owner_twitch_id,),
+            ).fetchone()
             if existing:
-                c.execute('DELETE FROM events WHERE id = ?', (existing['id'],))
+                c.execute("DELETE FROM events WHERE id = ?", (existing["id"],))
 
             slug = self._slug_for_user(twitch_login or owner_twitch_id, c)
-            event_invite = _new_token('ev_')
-            cur = c.execute('''
+            event_invite = _new_token("ev_")
+            cur = c.execute(
+                """
                 INSERT INTO events (owner_twitch_id, name, goal, mode, paused,
                                     total_dealt, event_invite_token, slug, created_at)
                 VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?)
-            ''', (owner_twitch_id, name, float(goal), mode, event_invite, slug, _now_iso()))
+                """,
+                (owner_twitch_id, name, float(goal), mode,
+                 event_invite, slug, _now_iso()),
+            )
             event_id = cur.lastrowid
 
-            for i, spec in enumerate(team_specs[:4]):
-                c.execute('''
+            for position, spec in enumerate(teams):
+                team_name = (spec.get("name") or f"Team {position + 1}").strip()
+                color = (spec.get("color") or "#ffd700").strip()
+                c.execute(
+                    """
                     INSERT INTO teams (event_id, position, name, color, damage, invite_token)
                     VALUES (?, ?, ?, ?, 0, ?)
-                ''', (event_id, i, (spec.get('name') or 'Team {}'.format(i+1)).strip(),
-                      (spec.get('color') or '#ffd700').strip(), _new_token('tm_')))
+                    """,
+                    (event_id, position, team_name, color, _new_token("tm_")),
+                )
+            log.info("Created event id=%s owner=%s slug=%s teams=%d",
+                     event_id, owner_twitch_id, slug, len(teams))
             return event_id
 
-    def delete_event(self, event_id):
+    def delete_event(self, event_id: int) -> None:
         with self._lock, self._conn() as c:
-            c.execute('DELETE FROM events WHERE id = ?', (event_id,))
+            c.execute("DELETE FROM events WHERE id = ?", (event_id,))
 
-    def set_event_goal(self, event_id, goal):
+    def set_event_goal(self, event_id: int, goal: float) -> None:
         with self._lock, self._conn() as c:
-            c.execute('UPDATE events SET goal = ? WHERE id = ?', (float(goal), event_id))
+            c.execute("UPDATE events SET goal = ? WHERE id = ?",
+                      (float(goal), event_id))
 
-    def set_event_paused(self, event_id, paused):
+    def set_event_paused(self, event_id: int, paused: bool) -> None:
         with self._lock, self._conn() as c:
-            c.execute('UPDATE events SET paused = ? WHERE id = ?', (1 if paused else 0, event_id))
+            c.execute("UPDATE events SET paused = ? WHERE id = ?",
+                      (1 if paused else 0, event_id))
 
-    def reset_event(self, event_id, new_goal=None):
+    def reset_event(self, event_id: int, new_goal: float | None = None) -> None:
         with self._lock, self._conn() as c:
             if new_goal is not None:
-                c.execute('UPDATE events SET total_dealt=0, paused=0, goal=? WHERE id=?',
-                          (float(new_goal), event_id))
+                c.execute(
+                    "UPDATE events SET total_dealt = 0, paused = 0, goal = ? "
+                    "WHERE id = ?",
+                    (float(new_goal), event_id),
+                )
             else:
-                c.execute('UPDATE events SET total_dealt=0, paused=0 WHERE id=?', (event_id,))
-            c.execute('UPDATE teams     SET damage=0 WHERE event_id=?', (event_id,))
-            c.execute('UPDATE streamers SET damage=0, last_seen=NULL WHERE event_id=?', (event_id,))
-            c.execute('DELETE FROM event_log WHERE event_id=?', (event_id,))
+                c.execute(
+                    "UPDATE events SET total_dealt = 0, paused = 0 WHERE id = ?",
+                    (event_id,),
+                )
+            c.execute("UPDATE teams     SET damage = 0 WHERE event_id = ?", (event_id,))
+            c.execute("UPDATE streamers SET damage = 0, last_seen = NULL "
+                      "WHERE event_id = ?", (event_id,))
+            c.execute("DELETE FROM event_log WHERE event_id = ?", (event_id,))
 
-    def regenerate_event_invite(self, event_id):
-        token = _new_token('ev_')
+    def regenerate_event_invite(self, event_id: int) -> str:
+        token = _new_token("ev_")
         with self._lock, self._conn() as c:
-            c.execute('UPDATE events SET event_invite_token = ? WHERE id = ?', (token, event_id))
+            c.execute("UPDATE events SET event_invite_token = ? WHERE id = ?",
+                      (token, event_id))
         return token
 
-    def regenerate_team_invite(self, team_id):
-        token = _new_token('tm_')
+    def regenerate_team_invite(self, team_id: int) -> str:
+        token = _new_token("tm_")
         with self._lock, self._conn() as c:
-            c.execute('UPDATE teams SET invite_token = ? WHERE id = ?', (token, team_id))
+            c.execute("UPDATE teams SET invite_token = ? WHERE id = ?",
+                      (token, team_id))
         return token
 
-    # ── Invites + Join ────────────────────────────────────────────────────────
+    # ── Invites & Join ────────────────────────────────────────────────────────
 
-    def resolve_invite(self, token):
-        """Returns ('event', event_dict) or ('team', team_dict + event_dict) or (None, None)"""
+    def resolve_invite(self, token: str | None) -> tuple[str | None, dict | None]:
+        """Return (kind, info) for an invite token. `kind` is 'event' or
+        'team'; for team invites the result row also carries the joined event
+        fields prefixed with `e_`."""
         if not token:
             return None, None
         with self._lock, self._conn() as c:
-            r = c.execute('SELECT * FROM events WHERE event_invite_token = ?', (token,)).fetchone()
-            if r:
-                return 'event', dict(r)
-            r = c.execute('''
+            row = c.execute(
+                "SELECT * FROM events WHERE event_invite_token = ?", (token,),
+            ).fetchone()
+            if row:
+                return "event", dict(row)
+            row = c.execute(
+                """
                 SELECT teams.*, events.id AS e_id, events.name AS e_name,
                        events.slug AS e_slug, events.owner_twitch_id AS e_owner
                 FROM teams JOIN events ON teams.event_id = events.id
                 WHERE teams.invite_token = ?
-            ''', (token,)).fetchone()
-            if r:
-                d = dict(r)
-                return 'team', d
+                """,
+                (token,),
+            ).fetchone()
+            if row:
+                return "team", dict(row)
             return None, None
 
-    def join_via_invite(self, token, wot_name):
-        kind, info = self.resolve_invite(token)
-        if not kind:
-            return None, 'Einladungslink ungueltig.'
-        wot_name = (wot_name or '').strip()
+    def join_via_invite(self, token: str, wot_name: str
+                        ) -> tuple[dict | None, str | None]:
+        """Returns (result_dict, error_key). The caller maps `error_key`
+        to a localized message via i18n."""
+        wot_name = (wot_name or "").strip()
         if not wot_name:
-            return None, 'WoT-Name darf nicht leer sein.'
-        event_id = info['id'] if kind == 'event' else info['event_id']
-        team_id  = info['id'] if kind == 'team'  else None
+            return None, "invite.wot_name_empty"
+
+        kind, info = self.resolve_invite(token)
+        if not kind or not info:
+            return None, "invite.invalid"
+
+        event_id = info["id"] if kind == "event" else info["event_id"]
+        team_id = info["id"] if kind == "team" else None
 
         with self._lock, self._conn() as c:
             existing = c.execute(
-                'SELECT * FROM streamers WHERE event_id = ? AND wot_name = ?',
-                (event_id, wot_name)).fetchone()
+                "SELECT * FROM streamers WHERE event_id = ? AND wot_name = ?",
+                (event_id, wot_name),
+            ).fetchone()
             if existing:
-                streamer_token = existing['token']
-                c.execute('UPDATE streamers SET team_id = ?, active = 1 WHERE token = ?',
-                          (team_id, streamer_token))
+                streamer_token = existing["token"]
+                c.execute(
+                    "UPDATE streamers SET team_id = ?, active = 1 WHERE token = ?",
+                    (team_id, streamer_token),
+                )
             else:
                 streamer_token = _new_uuid()
-                c.execute('''
+                c.execute(
+                    """
                     INSERT INTO streamers (token, event_id, team_id, wot_name, created_at)
                     VALUES (?, ?, ?, ?, ?)
-                ''', (streamer_token, event_id, team_id, wot_name, _now_iso()))
+                    """,
+                    (streamer_token, event_id, team_id, wot_name, _now_iso()),
+                )
 
-            event = c.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
-            team  = c.execute('SELECT * FROM teams WHERE id = ?', (team_id,)).fetchone() if team_id else None
+            event = c.execute(
+                "SELECT * FROM events WHERE id = ?", (event_id,),
+            ).fetchone()
+            team = None
+            if team_id:
+                team = c.execute(
+                    "SELECT * FROM teams WHERE id = ?", (team_id,),
+                ).fetchone()
+            log.info("Streamer joined event=%s name=%r team=%s",
+                     event_id, wot_name, team_id)
             return {
-                'streamer_token': streamer_token,
-                'event': dict(event),
-                'team':  dict(team) if team else None,
-            }, 'OK'
+                "streamer_token": streamer_token,
+                "event": dict(event),
+                "team":  dict(team) if team else None,
+            }, None
 
     # ── Damage ────────────────────────────────────────────────────────────────
 
-    def record_damage(self, streamer_token, damage, key=None):
+    def record_damage(self, streamer_token: str, damage: int,
+                      key: str | None = None) -> tuple[bool, int]:
         damage = int(damage)
         if damage <= 0:
             return False, 0
+        if damage > MAX_DAMAGE_PER_REQUEST:
+            log.warning("Clamped implausible damage value: %d", damage)
+            damage = MAX_DAMAGE_PER_REQUEST
+
         with self._lock, self._conn() as c:
-            # Idempotency cleanup
             now = time.time()
-            c.execute('DELETE FROM idempotency WHERE created < ?', (now - 60,))
+            c.execute("DELETE FROM idempotency WHERE created < ?",
+                      (now - IDEMPOTENCY_TTL_SECONDS,))
             if key:
                 try:
-                    c.execute('INSERT INTO idempotency (key, created) VALUES (?, ?)',
-                              (key, now))
+                    c.execute(
+                        "INSERT INTO idempotency (key, created) VALUES (?, ?)",
+                        (key, now),
+                    )
                 except sqlite3.IntegrityError:
-                    return True, 0  # already counted
+                    return True, 0  # duplicate request, already counted
 
-            s = c.execute('SELECT * FROM streamers WHERE token = ?',
-                          (streamer_token,)).fetchone()
-            if not s or not s['active']:
+            streamer = c.execute(
+                "SELECT * FROM streamers WHERE token = ?", (streamer_token,),
+            ).fetchone()
+            if not streamer or not streamer["active"]:
                 return False, 0
-            ev = c.execute('SELECT * FROM events WHERE id = ?', (s['event_id'],)).fetchone()
-            if not ev or ev['paused']:
-                return False, max(0, int(ev['goal'] - ev['total_dealt'])) if ev else 0
 
-            new_total = ev['total_dealt'] + damage
-            c.execute('UPDATE events SET total_dealt = ? WHERE id = ?',
-                      (new_total, ev['id']))
-            c.execute('UPDATE streamers SET damage = damage + ?, last_seen = ? WHERE token = ?',
-                      (damage, _now_iso(), streamer_token))
-            if s['team_id']:
-                c.execute('UPDATE teams SET damage = damage + ? WHERE id = ?',
-                          (damage, s['team_id']))
-            remaining = max(0, int(ev['goal'] - new_total))
-            c.execute('''
+            event = c.execute(
+                "SELECT * FROM events WHERE id = ?", (streamer["event_id"],),
+            ).fetchone()
+            if not event:
+                return False, 0
+            if event["paused"]:
+                return False, max(0, int(event["goal"] - event["total_dealt"]))
+
+            new_total = event["total_dealt"] + damage
+            c.execute("UPDATE events SET total_dealt = ? WHERE id = ?",
+                      (new_total, event["id"]))
+            c.execute(
+                "UPDATE streamers SET damage = damage + ?, last_seen = ? "
+                "WHERE token = ?",
+                (damage, _now_iso(), streamer_token),
+            )
+            if streamer["team_id"]:
+                c.execute(
+                    "UPDATE teams SET damage = damage + ? WHERE id = ?",
+                    (damage, streamer["team_id"]),
+                )
+            remaining = max(0, int(event["goal"] - new_total))
+            c.execute(
+                """
                 INSERT INTO event_log (event_id, t, wot_name, team_id, damage, remaining)
                 VALUES (?, ?, ?, ?, ?, ?)
-            ''', (ev['id'], datetime.now().strftime('%H:%M:%S'),
-                  s['wot_name'], s['team_id'], damage, remaining))
-            # Trim log to last 200 per event
-            c.execute('''
-                DELETE FROM event_log WHERE event_id = ? AND id NOT IN (
-                    SELECT id FROM event_log WHERE event_id = ? ORDER BY id DESC LIMIT 200
-                )
-            ''', (ev['id'], ev['id']))
+                """,
+                (event["id"], datetime.now().strftime("%H:%M:%S"),
+                 streamer["wot_name"], streamer["team_id"], damage, remaining),
+            )
+            c.execute(
+                """
+                DELETE FROM event_log
+                 WHERE event_id = ?
+                   AND id NOT IN (
+                       SELECT id FROM event_log
+                        WHERE event_id = ?
+                        ORDER BY id DESC LIMIT ?
+                   )
+                """,
+                (event["id"], event["id"], EVENT_LOG_LIMIT),
+            )
             return True, remaining
 
-    # ── Snapshots ─────────────────────────────────────────────────────────────
+    # ── State snapshot ────────────────────────────────────────────────────────
 
-    def get_event_state(self, event_id, base_url=''):
+    def get_event_state(self, event_id: int, base_url: str = "") -> dict | None:
         with self._lock, self._conn() as c:
-            ev = c.execute('SELECT * FROM events WHERE id = ?', (event_id,)).fetchone()
-            if not ev:
+            event = c.execute(
+                "SELECT * FROM events WHERE id = ?", (event_id,),
+            ).fetchone()
+            if not event:
                 return None
-            teams = c.execute('SELECT * FROM teams WHERE event_id = ? ORDER BY position',
-                              (event_id,)).fetchall()
-            streamers = c.execute('SELECT * FROM streamers WHERE event_id = ?',
-                                  (event_id,)).fetchall()
-            logs = c.execute('SELECT * FROM event_log WHERE event_id = ? ORDER BY id DESC LIMIT 30',
-                             (event_id,)).fetchall()
+            teams = c.execute(
+                "SELECT * FROM teams WHERE event_id = ? ORDER BY position",
+                (event_id,),
+            ).fetchall()
+            streamers = c.execute(
+                "SELECT * FROM streamers WHERE event_id = ?", (event_id,),
+            ).fetchall()
+            logs = c.execute(
+                "SELECT * FROM event_log WHERE event_id = ? "
+                "ORDER BY id DESC LIMIT 30",
+                (event_id,),
+            ).fetchall()
+            owner = c.execute(
+                "SELECT * FROM users WHERE twitch_id = ?",
+                (event["owner_twitch_id"],),
+            ).fetchone()
 
-            owner = c.execute('SELECT * FROM users WHERE twitch_id = ?',
-                              (ev['owner_twitch_id'],)).fetchone()
+        base = base_url.rstrip("/") if base_url else ""
 
-            base = base_url.rstrip('/') if base_url else ''
-            teams_out = []
-            for t in teams:
-                teams_out.append({
-                    'id':           t['id'],
-                    'name':         t['name'],
-                    'color':        t['color'],
-                    'damage':       int(t['damage']),
-                    'invite_token': t['invite_token'],
-                    'invite_url':   '{}/join/{}'.format(base, t['invite_token']) if base else None,
-                    'members':      [s['wot_name'] for s in streamers if s['team_id'] == t['id']],
-                })
+        teams_out: list[dict] = []
+        for team in teams:
+            members = [s["wot_name"] for s in streamers if s["team_id"] == team["id"]]
+            teams_out.append({
+                "id":           team["id"],
+                "name":         team["name"],
+                "color":        team["color"],
+                "damage":       int(team["damage"]),
+                "invite_token": team["invite_token"],
+                "invite_url":   f"{base}/join/{team['invite_token']}" if base else None,
+                "members":      members,
+            })
 
-            streamers_map = {}
-            for s in streamers:
-                streamers_map[s['wot_name']] = {
-                    'team_id':   s['team_id'],
-                    'damage':    int(s['damage']),
-                    'last_seen': s['last_seen'],
-                    'active':    bool(s['active']),
-                }
-
-            log_out = [dict(l) for l in logs]
-            for entry in log_out:
-                entry['streamer'] = entry['wot_name']  # alias for frontend compat
-
-            return {
-                'event': {
-                    'id':           ev['id'],
-                    'slug':         ev['slug'],
-                    'name':         ev['name'],
-                    'goal':         int(ev['goal']),
-                    'mode':         ev['mode'],
-                    'paused':       bool(ev['paused']),
-                    'total_dealt':  int(ev['total_dealt']),
-                    'remaining':    max(0, int(ev['goal'] - ev['total_dealt'])),
-                    'invite_token': ev['event_invite_token'],
-                    'invite_url':   '{}/join/{}'.format(base, ev['event_invite_token']) if base else None,
-                    'overlay_url':  '{}/overlay/{}'.format(base, ev['slug']) if base else None,
-                    'owner': dict(owner) if owner else None,
-                },
-                'teams':     teams_out,
-                'streamers': streamers_map,
-                'event_log': log_out,
+        streamers_map: dict[str, dict] = {}
+        for streamer in streamers:
+            streamers_map[streamer["wot_name"]] = {
+                "team_id":   streamer["team_id"],
+                "damage":    int(streamer["damage"]),
+                "last_seen": streamer["last_seen"],
+                "active":    bool(streamer["active"]),
             }
+
+        log_out = []
+        for entry in logs:
+            row = dict(entry)
+            row["streamer"] = row["wot_name"]  # backward-compatible alias
+            log_out.append(row)
+
+        return {
+            "event": {
+                "id":           event["id"],
+                "slug":         event["slug"],
+                "name":         event["name"],
+                "goal":         int(event["goal"]),
+                "mode":         event["mode"],
+                "paused":       bool(event["paused"]),
+                "total_dealt":  int(event["total_dealt"]),
+                "remaining":    max(0, int(event["goal"] - event["total_dealt"])),
+                "invite_token": event["event_invite_token"],
+                "invite_url":   f"{base}/join/{event['event_invite_token']}" if base else None,
+                "overlay_url":  f"{base}/overlay/{event['slug']}" if base else None,
+                "owner":        dict(owner) if owner else None,
+            },
+            "teams":     teams_out,
+            "streamers": streamers_map,
+            "event_log": log_out,
+        }

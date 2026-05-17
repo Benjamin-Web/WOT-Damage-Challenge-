@@ -22,9 +22,7 @@
       z-index: 10;
     }
     .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
       margin-bottom: 16px;
     }
     .stat-card {
@@ -62,11 +60,7 @@
       box-shadow: var(--md3-shadow-glow);
     }
 
-    .layout {
-      display: grid;
-      grid-template-columns: 1fr 360px;
-      gap: 20px;
-    }
+    .layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; }
     @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
 
     .col-main { display: flex; flex-direction: column; gap: 16px; }
@@ -80,32 +74,19 @@
       padding: 16px 18px;
       margin-bottom: 12px;
     }
-    .team-head {
-      display: flex; align-items: center; gap: 10px;
-      margin-bottom: 12px;
-    }
+    .team-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .team-dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
     .team-name-big { font-size: 16px; font-weight: 800; }
-    .team-stats {
-      display: flex; gap: 16px; font-size: 12px;
-      color: var(--text-muted);
-    }
+    .team-stats { display: flex; gap: 16px; font-size: 12px; color: var(--text-muted); }
     .team-stats b { color: var(--text-primary); font-weight: 700; }
     .team-bar {
       height: 8px;
-      background: rgba(255,255,255,0.06);
+      background: rgba(255, 255, 255, 0.06);
       border-radius: 4px; overflow: hidden;
       margin: 10px 0;
     }
-    .team-bar-fill {
-      height: 100%;
-      transition: width 0.6s var(--ease-emph);
-      border-radius: 4px;
-    }
-    .members-row {
-      display: flex; flex-wrap: wrap; gap: 6px;
-      margin-top: 10px;
-    }
+    .team-bar-fill { height: 100%; transition: width 0.6s var(--ease-emph); border-radius: 4px; }
+    .members-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     .member-chip {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 4px 10px;
@@ -114,16 +95,8 @@
       border-radius: var(--r-full);
       font-size: 12px; font-weight: 500;
     }
-    .member-chip .dmg {
-      color: var(--md3-primary);
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-    .member-chip .live-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--md3-success);
-    }
+    .member-chip .dmg { color: var(--md3-primary); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .member-chip .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--md3-success); }
     .member-chip .live-dot.off { background: var(--text-dim); }
 
     .invite-row {
@@ -143,7 +116,7 @@
       padding: 4px 10px;
       background: var(--md3-primary-container);
       color: var(--md3-on-primary-container);
-      border: 1px solid rgba(255,215,0,0.3);
+      border: 1px solid rgba(255, 215, 0, 0.3);
       border-radius: var(--r-xs);
       font-size: 11px; font-weight: 700;
       cursor: pointer;
@@ -152,9 +125,7 @@
     .copy-btn:hover { background: rgba(255, 215, 0, 0.22); }
 
     .team-setup-row {
-      display: grid;
-      grid-template-columns: 28px 1fr 100px;
-      gap: 8px;
+      display: grid; grid-template-columns: 28px 1fr 100px; gap: 8px;
       align-items: center;
       margin-bottom: 8px;
     }
@@ -165,20 +136,22 @@
       border: 2px solid var(--md3-outline);
     }
 
-    .log-card { background: var(--md3-surface-container); border: 1px solid var(--md3-outline); border-radius: var(--r-lg); }
+    .log-card {
+      background: var(--md3-surface-container);
+      border: 1px solid var(--md3-outline);
+      border-radius: var(--r-lg);
+    }
     .log-list { max-height: 280px; overflow-y: auto; padding: 6px 0; }
     .log-row {
-      display: grid;
-      grid-template-columns: 70px 1fr 80px 80px;
-      gap: 10px;
+      display: grid; grid-template-columns: 70px 1fr 80px 80px; gap: 10px;
       padding: 7px 18px;
       font-size: 12px;
       font-variant-numeric: tabular-nums;
     }
-    .log-row .t  { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
-    .log-row .s  { color: var(--text-primary); font-weight: 600; }
-    .log-row .d  { color: var(--md3-success); font-weight: 700; text-align: right; }
-    .log-row .r  { color: var(--text-muted); text-align: right; }
+    .log-row .t { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
+    .log-row .s { color: var(--text-primary); font-weight: 600; }
+    .log-row .d { color: var(--md3-success); font-weight: 700; text-align: right; }
+    .log-row .r { color: var(--text-muted); text-align: right; }
 
     .field-group { display: flex; flex-direction: column; gap: 14px; }
     .row-2 { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
@@ -186,7 +159,7 @@
     .modal-bg {
       display: none;
       position: fixed; inset: 0;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0, 0, 0, 0.7);
       backdrop-filter: blur(4px);
       z-index: 100;
       align-items: center; justify-content: center;
@@ -217,9 +190,7 @@
       background: none; border: 0; color: var(--text-muted);
       font-size: 22px; cursor: pointer; line-height: 1;
     }
-    .mode-toggle {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-    }
+    .mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .mode-opt {
       padding: 14px;
       border: 1px solid var(--md3-outline);
@@ -256,15 +227,28 @@
         <span class="sub" id="ev-name-top">—</span>
       </div>
       <div class="spacer"></div>
-      <div id="user-chip" style="display:flex; align-items:center; gap:10px; padding:6px 12px; background:var(--md3-surface-container-high); border:1px solid var(--md3-outline); border-radius:var(--r-full); font-size:13px; font-weight:600;"></div>
-      <span class="pulse-dot">Live</span>
-      <button class="btn btn-secondary" onclick="location.href='/auth/logout'">Abmelden</button>
+      <div id="lang-bar"></div>
+      <div id="user-chip" style="display:flex; align-items:center; gap:10px; padding:6px 12px;
+           background:var(--md3-surface-container-high); border:1px solid var(--md3-outline);
+           border-radius:var(--r-full); font-size:13px; font-weight:600;"></div>
+      <span class="pulse-dot" data-i18n="common.live">Live</span>
+      <button class="btn btn-secondary" onclick="location.href='/auth/logout'"
+              data-i18n="admin.logout">Abmelden</button>
     </header>
 
     <div class="stats-grid">
-      <div class="stat-card rest"><div class="lbl">Restdamage</div><div class="val" id="s-rest">0</div></div>
-      <div class="stat-card dealt"><div class="lbl">Dealt Gesamt</div><div class="val" id="s-dealt">0</div></div>
-      <div class="stat-card goal"><div class="lbl">Ziel</div><div class="val" id="s-goal">0</div></div>
+      <div class="stat-card rest">
+        <div class="lbl" data-i18n="admin.stat.remaining">Restdamage</div>
+        <div class="val" id="s-rest">0</div>
+      </div>
+      <div class="stat-card dealt">
+        <div class="lbl" data-i18n="admin.stat.dealt">Dealt Gesamt</div>
+        <div class="val" id="s-dealt">0</div>
+      </div>
+      <div class="stat-card goal">
+        <div class="lbl" data-i18n="admin.stat.goal">Ziel</div>
+        <div class="val" id="s-goal">0</div>
+      </div>
     </div>
 
     <div class="global-prog"><div class="global-prog-fill" id="gprog" style="width:0%"></div></div>
@@ -274,63 +258,85 @@
         <div id="teams-area"></div>
 
         <div class="log-card">
-          <h2 class="card-title" style="padding: 16px 18px 0; margin: 0;">Live-Log</h2>
+          <h2 class="card-title" style="padding: 16px 18px 0; margin: 0;"
+              data-i18n="admin.live_log">Live-Log</h2>
           <div class="log-list" id="log"></div>
         </div>
       </div>
 
       <div class="col-side">
         <section class="card">
-          <h2 class="card-title">Event-Steuerung</h2>
+          <h2 class="card-title" data-i18n="admin.controls">Event-Steuerung</h2>
           <div class="field-group">
-            <button class="btn btn-primary btn-block" onclick="openWizard()">＋ Neues Event erstellen</button>
+            <button class="btn btn-primary btn-block" onclick="openWizard()"
+                    data-i18n="admin.new_event_btn">＋ Neues Event erstellen</button>
 
             <div>
-              <label>Schaden-Ziel anpassen</label>
+              <label data-i18n="admin.adjust_goal">Schaden-Ziel anpassen</label>
               <div class="row-2">
-                <input type="number" id="i-goal" placeholder="z.B. 100000">
-                <button class="btn btn-secondary" onclick="setGoal()">Setzen</button>
+                <input type="number" id="i-goal" placeholder="100000">
+                <button class="btn btn-secondary" onclick="setGoal()"
+                        data-i18n="admin.set">Setzen</button>
               </div>
             </div>
 
             <div class="row gap-sm">
-              <button class="btn btn-warn btn-block" id="pause-btn" onclick="togglePause()">⏸ Pause</button>
-              <button class="btn btn-danger btn-block" onclick="resetEvent()">↻ Reset</button>
+              <button class="btn btn-warn btn-block" id="pause-btn" onclick="togglePause()">⏸</button>
+              <button class="btn btn-danger btn-block" onclick="resetEvent()"
+                      data-i18n="admin.reset">↻ Reset</button>
             </div>
           </div>
         </section>
 
         <section class="card">
-          <h2 class="card-title">Event-Invite</h2>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">
+          <h2 class="card-title" data-i18n="admin.event_invite">Event-Einladung</h2>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"
+               data-i18n="admin.event_invite_hint">
             Allgemeiner Link — Streamer wird ohne Team-Zuordnung registriert.
           </div>
           <div class="invite-row">
             <span class="url" id="ev-url">—</span>
-            <button class="copy-btn" onclick="copyText(document.getElementById('ev-url').textContent)">KOPIEREN</button>
+            <button class="copy-btn"
+                    onclick="copyText(document.getElementById('ev-url').textContent)"
+                    data-i18n="common.copy">Kopieren</button>
           </div>
           <button class="btn btn-secondary btn-block" style="margin-top:8px;"
-                  onclick="regenerate('event')">Neu generieren</button>
+                  onclick="regenerate('event')" data-i18n="common.regenerate">Neu generieren</button>
         </section>
 
         <section class="card">
-          <h2 class="card-title">OBS Browser-Source</h2>
-          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">
+          <h2 class="card-title" data-i18n="admin.obs_browser">OBS Browser-Source</h2>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"
+               data-i18n="admin.obs_browser_hint">
             Diese URL als Browser-Source in OBS hinzufuegen (300x180px, transparent).
           </div>
           <div class="invite-row">
             <span class="url" id="overlay-url">—</span>
-            <button class="copy-btn" onclick="copyText(document.getElementById('overlay-url').textContent)">KOPIEREN</button>
+            <button class="copy-btn"
+                    onclick="copyText(document.getElementById('overlay-url').textContent)"
+                    data-i18n="common.copy">Kopieren</button>
           </div>
         </section>
 
         <section class="card">
-          <h2 class="card-title">Anleitung</h2>
+          <h2 class="card-title" data-i18n="admin.howto">Anleitung</h2>
           <div style="font-size:12px; color:var(--text-muted); line-height:1.7;">
-            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">1.</strong> Team-Invite-Link kopieren, an Streamer schicken.</p>
-            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">2.</strong> Streamer oeffnet <code>DamageRace.exe</code> &rarr; "An Event teilnehmen" &rarr; Code + WoT-Name.</p>
-            <p style="margin-bottom:6px;"><strong style="color:var(--md3-primary)">3.</strong> Exe installiert WoT-Mod automatisch.</p>
-            <p><strong style="color:var(--md3-primary)">4.</strong> OBS Browser-Source mit obiger URL.</p>
+            <p style="margin-bottom:6px;">
+              <strong style="color:var(--md3-primary)">1.</strong>
+              <span data-i18n="admin.howto.1">Team-Invite-Link kopieren, an Streamer schicken.</span>
+            </p>
+            <p style="margin-bottom:6px;">
+              <strong style="color:var(--md3-primary)">2.</strong>
+              <span data-i18n-html="admin.howto.2">Streamer oeffnet <code>DamageRace.exe</code></span>
+            </p>
+            <p style="margin-bottom:6px;">
+              <strong style="color:var(--md3-primary)">3.</strong>
+              <span data-i18n="admin.howto.3">Exe installiert WoT-Mod automatisch.</span>
+            </p>
+            <p>
+              <strong style="color:var(--md3-primary)">4.</strong>
+              <span data-i18n="admin.howto.4">OBS Browser-Source mit obiger URL.</span>
+            </p>
           </div>
         </section>
       </div>
@@ -340,196 +346,256 @@
   <div class="modal-bg" id="wizard">
     <div class="modal">
       <div class="modal-head">
-        <div class="modal-title">Neues Event erstellen</div>
+        <div class="modal-title" data-i18n="admin.wizard.title">Neues Event erstellen</div>
         <button class="close-x" onclick="closeWizard()">&times;</button>
       </div>
       <div class="modal-body">
         <div class="field-group">
           <div>
-            <label>Event-Name</label>
-            <input type="text" id="w-name" placeholder="z.B. Mohjos Sommer-Cup">
+            <label data-i18n="admin.wizard.name">Event-Name</label>
+            <input type="text" id="w-name" data-i18n-attr="placeholder=admin.wizard.name_hint">
           </div>
           <div>
-            <label>Schaden-Ziel</label>
+            <label data-i18n="admin.wizard.goal">Schaden-Ziel</label>
             <input type="number" id="w-goal" value="100000" placeholder="100000">
           </div>
           <div>
-            <label>Modus</label>
+            <label data-i18n="admin.wizard.mode">Modus</label>
             <div class="mode-toggle">
               <div class="mode-opt active" data-mode="coop" onclick="selectMode('coop')">
-                <div class="t">Kooperativ</div>
-                <div class="d">Alle Teams an einem gemeinsamen Ziel</div>
+                <div class="t" data-i18n="admin.wizard.mode_coop">Kooperativ</div>
+                <div class="d" data-i18n="admin.wizard.mode_coop_d">Alle Teams an einem gemeinsamen Ziel</div>
               </div>
               <div class="mode-opt" data-mode="versus" onclick="selectMode('versus')">
-                <div class="t">Versus</div>
-                <div class="d">Team-Wettstreit: erstes Team am Ziel gewinnt</div>
+                <div class="t" data-i18n="admin.wizard.mode_versus">Versus</div>
+                <div class="d" data-i18n="admin.wizard.mode_v_desc">Team-Wettstreit: erstes Team am Ziel gewinnt</div>
               </div>
             </div>
           </div>
           <div>
-            <label>Teams (2-4)</label>
+            <label data-i18n="admin.wizard.teams">Teams (2-4)</label>
             <div id="w-teams"></div>
-            <button class="btn btn-secondary" id="add-team-btn" onclick="addTeamRow()">＋ Team hinzufuegen</button>
+            <button class="btn btn-secondary" id="add-team-btn" onclick="addTeamRow()"
+                    data-i18n="admin.wizard.add_team">＋ Team hinzufuegen</button>
           </div>
         </div>
       </div>
       <div class="modal-foot">
-        <button class="btn btn-secondary" onclick="closeWizard()">Abbrechen</button>
-        <button class="btn btn-primary" onclick="wizardSubmit()">Event erstellen</button>
+        <button class="btn btn-secondary" onclick="closeWizard()" data-i18n="common.cancel">Abbrechen</button>
+        <button class="btn btn-primary" onclick="wizardSubmit()" data-i18n="admin.wizard.submit">Event erstellen</button>
       </div>
     </div>
   </div>
 
+  <script src="/i18n.js"></script>
   <script>
+    'use strict';
+
+    i18n.mountToggle(document.getElementById('lang-bar'));
+
+    const DEFAULT_COLORS = ['#ffd700', '#03dac6', '#ff6b6b', '#a78bfa'];
+    const POLL_MS = 2000;
+
     let currentMode = 'coop';
     let wizardTeams = [];
-    const DEFAULT_COLORS = ['#ffd700', '#03dac6', '#ff6b6b', '#a78bfa'];
-    const DEFAULT_NAMES  = ['Team Gold', 'Team Cyan', 'Team Rot', 'Team Violett'];
+    let latest = null;
 
-    const $ = id => document.getElementById(id);
-    const fmt = n => Math.max(0, Math.round(n)).toLocaleString('de-DE');
-
-    async function fetchJson(url, opts) {
-      const r = await fetch(url, Object.assign({credentials:'include'}, opts || {}));
-      if (r.status === 401 || r.status === 403) { location.href = '/login'; throw new Error('auth'); }
-      return r.json();
+    function defaultTeamNames() {
+      return i18n.get() === 'en'
+        ? ['Team Gold', 'Team Cyan', 'Team Red', 'Team Violet']
+        : ['Team Gold', 'Team Cyan', 'Team Rot', 'Team Violett'];
     }
 
-    function toast(msg, kind) {
-      kind = kind || 'ok';
+    const $ = function (id) { return document.getElementById(id); };
+
+    function localeForFormat() {
+      return i18n.get() === 'en' ? 'en-US' : 'de-DE';
+    }
+    function fmt(n) {
+      return Math.max(0, Math.round(n)).toLocaleString(localeForFormat());
+    }
+
+    async function fetchJson(url, opts) {
+      const res = await fetch(url, Object.assign({ credentials: 'include' }, opts || {}));
+      if (res.status === 401 || res.status === 403) {
+        location.href = '/login';
+        throw new Error('auth');
+      }
+      return res.json();
+    }
+
+    function toast(message, kind) {
       const el = document.createElement('div');
-      el.className = 'toast ' + kind;
-      el.textContent = msg;
+      el.className = 'toast ' + (kind || 'ok');
+      el.textContent = message;
       document.body.appendChild(el);
-      setTimeout(() => el.remove(), 2800);
+      setTimeout(function () { el.remove(); }, 2800);
     }
 
     function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+      });
     }
 
-    function copyText(t) {
-      if (!t || t === '—') return;
-      navigator.clipboard.writeText(t).then(() => toast('Kopiert.'));
+    function copyText(text) {
+      if (!text || text === '—') return;
+      navigator.clipboard.writeText(text).then(function () {
+        toast(i18n.t('common.copied'));
+      });
     }
 
-    let latest = null;
     async function refresh() {
       try {
-        const d = await fetchJson('/api/my-event');
-        if (!d.authenticated) { location.href = '/login'; return; }
-        latest = d;
-        renderUser(d.user);
-        if (!d.event) { renderEmpty(); return; }
-        render(d);
-      } catch (_) {}
+        const data = await fetchJson('/api/my-event');
+        if (!data.authenticated) { location.href = '/login'; return; }
+        latest = data;
+        renderUser(data.user);
+        if (!data.event) { renderEmpty(); return; }
+        render(data);
+      } catch (_) { /* handled by fetchJson redirect */ }
     }
 
-    function renderUser(u) {
-      if (!u) return;
-      const el = $('user-chip');
-      el.innerHTML = (u.avatar_url
-        ? '<img src="' + u.avatar_url + '" style="width:24px;height:24px;border-radius:50%">'
-        : '<span style="color:var(--md3-primary)">👤</span>')
-        + '<span>' + escapeHtml(u.display_name) + '</span>';
+    function renderUser(user) {
+      if (!user) return;
+      $('user-chip').innerHTML =
+        (user.avatar_url
+          ? '<img src="' + user.avatar_url + '" style="width:24px;height:24px;border-radius:50%">'
+          : '<span style="color:var(--md3-primary)">👤</span>') +
+        '<span>' + escapeHtml(user.display_name) + '</span>';
     }
 
     function renderEmpty() {
-      $('ev-name-top').textContent = 'Kein aktives Event';
-      $('s-rest').textContent = '—';
+      $('ev-name-top').textContent = i18n.t('admin.no_event_top');
+      $('s-rest').textContent  = '—';
       $('s-dealt').textContent = '—';
-      $('s-goal').textContent = '—';
+      $('s-goal').textContent  = '—';
       $('gprog').style.width = '0%';
       $('ev-url').textContent = '—';
       $('overlay-url').textContent = '—';
       $('teams-area').innerHTML =
         '<div class="empty-state">' +
-        '<div class="ico">🏁</div>' +
-        '<div style="font-weight:700; color:var(--text-primary);">Noch kein Event erstellt</div>' +
-        '<div style="font-size:13px; margin-top:6px;">Klick "Neues Event erstellen" rechts um zu starten.</div>' +
+          '<div class="ico">🏁</div>' +
+          '<div style="font-weight:700; color:var(--text-primary);">' +
+            i18n.t('admin.empty.title') +
+          '</div>' +
+          '<div style="font-size:13px; margin-top:6px;">' +
+            i18n.t('admin.empty.hint') +
+          '</div>' +
         '</div>';
       $('log').innerHTML = '';
     }
 
-    function render(d) {
-      const ev = d.event;
-      $('ev-name-top').textContent = ev.name + ' · ' + (ev.mode === 'versus' ? 'Versus' : 'Coop');
-      $('overlay-url').textContent = ev.overlay_url || '—';
-      $('s-rest').textContent  = fmt(ev.remaining);
-      $('s-dealt').textContent = fmt(ev.total_dealt);
-      $('s-goal').textContent  = fmt(ev.goal);
-      const pct = ev.goal > 0 ? Math.min(100, ev.total_dealt / ev.goal * 100) : 0;
-      $('gprog').style.width = pct + '%';
+    function render(data) {
+      const event = data.event;
+      const modeLabel = event.mode === 'versus' ? 'Versus' : 'Coop';
+      $('ev-name-top').textContent = event.name + ' · ' + modeLabel;
+      $('overlay-url').textContent = event.overlay_url || '—';
+      $('s-rest').textContent  = fmt(event.remaining);
+      $('s-dealt').textContent = fmt(event.total_dealt);
+      $('s-goal').textContent  = fmt(event.goal);
+      const percent = event.goal > 0
+        ? Math.min(100, event.total_dealt / event.goal * 100)
+        : 0;
+      $('gprog').style.width = percent + '%';
 
-      $('pause-btn').textContent = ev.paused ? '▶ Fortsetzen' : '⏸ Pause';
-      $('pause-btn').className   = 'btn btn-block ' + (ev.paused ? 'btn-secondary' : 'btn-warn');
+      $('pause-btn').textContent = event.paused
+        ? i18n.t('admin.resume')
+        : i18n.t('admin.pause');
+      $('pause-btn').className = 'btn btn-block ' + (event.paused ? 'btn-secondary' : 'btn-warn');
 
-      $('ev-url').textContent = ev.invite_url || '—';
+      $('ev-url').textContent = event.invite_url || '—';
 
-      const teamsArea = $('teams-area');
-      if (!d.teams || d.teams.length === 0) {
-        teamsArea.innerHTML =
+      const teamsEl = $('teams-area');
+      if (!data.teams || data.teams.length === 0) {
+        teamsEl.innerHTML =
           '<div class="empty-state">' +
-          '<div class="ico">🏁</div>' +
-          '<div style="font-weight:700; color:var(--text-primary);">Noch keine Teams konfiguriert</div>' +
-          '<div style="font-size:13px; margin-top:6px;">Erstelle ein Event um Teams + Invite-Links zu generieren.</div>' +
+            '<div class="ico">🏁</div>' +
+            '<div style="font-weight:700; color:var(--text-primary);">' +
+              i18n.t('admin.no_teams.title') +
+            '</div>' +
+            '<div style="font-size:13px; margin-top:6px;">' +
+              i18n.t('admin.no_teams.hint') +
+            '</div>' +
           '</div>';
       } else {
-        teamsArea.innerHTML = d.teams.map(t => {
-          const pctT = ev.goal > 0 ? Math.min(100, t.damage / ev.goal * 100) : 0;
-          const remT = ev.mode === 'versus' ? Math.max(0, ev.goal - t.damage) : null;
-          const members = t.members.map(m => {
-            const sInfo = d.streamers[m] || {};
-            const live = sInfo.last_seen && (Date.now() - new Date(sInfo.last_seen).getTime() < 90000);
+        teamsEl.innerHTML = data.teams.map(function (team) {
+          const teamPct = event.goal > 0
+            ? Math.min(100, team.damage / event.goal * 100)
+            : 0;
+          const remTeam = event.mode === 'versus'
+            ? Math.max(0, event.goal - team.damage)
+            : null;
+          const memberHtml = team.members.map(function (name) {
+            const sInfo = data.streamers[name] || {};
+            const live = sInfo.last_seen &&
+                         (Date.now() - new Date(sInfo.last_seen).getTime() < 90000);
             return '<span class="member-chip">' +
-                   '<span class="live-dot ' + (live ? '' : 'off') + '"></span>' +
-                   escapeHtml(m) +
-                   '<span class="dmg">' + fmt(sInfo.damage || 0) + '</span>' +
+                     '<span class="live-dot' + (live ? '' : ' off') + '"></span>' +
+                     escapeHtml(name) +
+                     '<span class="dmg">' + fmt(sInfo.damage || 0) + '</span>' +
                    '</span>';
-          }).join('') || '<span style="color:var(--text-dim); font-size:12px;">Keine Mitglieder — Invite-Link teilen</span>';
+          }).join('') ||
+          '<span style="color:var(--text-dim); font-size:12px;">' +
+            i18n.t('admin.team.no_members') +
+          '</span>';
 
-          return '<div class="team-card" style="--tc:' + t.color + '">' +
+          return '<div class="team-card" style="--tc:' + team.color + '">' +
             '<div class="team-head">' +
-              '<span class="team-dot" style="background:' + t.color + '; color:' + t.color + '"></span>' +
-              '<span class="team-name-big">' + escapeHtml(t.name) + '</span>' +
+              '<span class="team-dot" style="background:' + team.color + '; color:' + team.color + '"></span>' +
+              '<span class="team-name-big">' + escapeHtml(team.name) + '</span>' +
               '<div class="spacer"></div>' +
               '<div class="team-stats">' +
-                '<span><b>' + fmt(t.damage) + '</b> Damage</span>' +
-                (remT !== null ? '<span><b>' + fmt(remT) + '</b> Rest</span>' : '') +
+                '<span><b>' + fmt(team.damage) + '</b> ' + i18n.t('admin.team.damage') + '</span>' +
+                (remTeam !== null
+                  ? '<span><b>' + fmt(remTeam) + '</b> ' + i18n.t('admin.team.remaining') + '</span>'
+                  : '') +
               '</div>' +
             '</div>' +
-            '<div class="team-bar"><div class="team-bar-fill" style="width:' + pctT + '%; background:linear-gradient(90deg, ' + t.color + 'aa, ' + t.color + ')"></div></div>' +
-            '<div class="members-row">' + members + '</div>' +
+            '<div class="team-bar">' +
+              '<div class="team-bar-fill" style="width:' + teamPct + '%;' +
+                'background:linear-gradient(90deg, ' + team.color + 'aa, ' + team.color + ')"></div>' +
+            '</div>' +
+            '<div class="members-row">' + memberHtml + '</div>' +
             '<div class="invite-row">' +
-              '<span class="url">' + (t.invite_url || '—') + '</span>' +
-              '<button class="copy-btn" onclick="copyText(\'' + (t.invite_url||'') + '\')">KOPIEREN</button>' +
-              '<button class="copy-btn" onclick="regenerate(\'team\',\'' + t.id + '\')" title="Neu generieren">↻</button>' +
+              '<span class="url">' + (team.invite_url || '—') + '</span>' +
+              '<button class="copy-btn" onclick="copyText(\'' + (team.invite_url || '') + '\')">' +
+                i18n.t('common.copy') +
+              '</button>' +
+              '<button class="copy-btn" onclick="regenerate(\'team\',\'' + team.id + '\')" ' +
+                'title="' + i18n.t('common.regenerate') + '">↻</button>' +
             '</div>' +
           '</div>';
         }).join('');
       }
 
-      const log = (d.event_log || []).slice().reverse();
+      const log = (data.event_log || []).slice().reverse();
       $('log').innerHTML = log.length === 0
-        ? '<div style="padding:20px; text-align:center; color:var(--text-dim); font-size:12px;">Noch keine Damage-Eintraege</div>'
-        : log.map(l =>
-            '<div class="log-row">' +
-              '<span class="t">' + l.t + '</span>' +
-              '<span class="s">' + escapeHtml(l.streamer) + '</span>' +
-              '<span class="d">+' + fmt(l.damage) + '</span>' +
-              '<span class="r">' + fmt(l.remaining) + '</span>' +
-            '</div>').join('');
+        ? '<div style="padding:20px; text-align:center; color:var(--text-dim); font-size:12px;">' +
+            i18n.t('admin.log.empty') +
+          '</div>'
+        : log.map(function (entry) {
+            return '<div class="log-row">' +
+              '<span class="t">' + entry.t + '</span>' +
+              '<span class="s">' + escapeHtml(entry.streamer) + '</span>' +
+              '<span class="d">+' + fmt(entry.damage) + '</span>' +
+              '<span class="r">' + fmt(entry.remaining) + '</span>' +
+            '</div>';
+          }).join('');
     }
 
     function openWizard() {
+      const names = defaultTeamNames();
       wizardTeams = [
-        {name: DEFAULT_NAMES[0], color: DEFAULT_COLORS[0]},
-        {name: DEFAULT_NAMES[1], color: DEFAULT_COLORS[1]},
+        { name: names[0], color: DEFAULT_COLORS[0] },
+        { name: names[1], color: DEFAULT_COLORS[1] },
       ];
       currentMode = 'coop';
       $('w-name').value = '';
       $('w-goal').value = 100000;
-      document.querySelectorAll('.mode-opt').forEach(el => el.classList.toggle('active', el.dataset.mode === 'coop'));
+      document.querySelectorAll('.mode-opt').forEach(function (el) {
+        el.classList.toggle('active', el.dataset.mode === 'coop');
+      });
       renderWizardTeams();
       $('wizard').classList.add('open');
       $('w-name').focus();
@@ -537,23 +603,31 @@
 
     function closeWizard() { $('wizard').classList.remove('open'); }
 
-    function selectMode(m) {
-      currentMode = m;
-      document.querySelectorAll('.mode-opt').forEach(el => el.classList.toggle('active', el.dataset.mode === m));
+    function selectMode(mode) {
+      currentMode = mode;
+      document.querySelectorAll('.mode-opt').forEach(function (el) {
+        el.classList.toggle('active', el.dataset.mode === mode);
+      });
     }
 
     function renderWizardTeams() {
       const wrap = $('w-teams');
       wrap.innerHTML = '';
-      wizardTeams.forEach((t, i) => {
+      wizardTeams.forEach(function (team, i) {
         const row = document.createElement('div');
         row.className = 'team-setup-row';
         row.innerHTML =
-          '<div class="color-swatch" style="background:' + t.color + '" onclick="cycleColor(' + i + ')" title="Klick: Farbe wechseln"></div>' +
-          '<input type="text" value="' + escapeHtml(t.name) + '" oninput="wizardTeams[' + i + '].name = this.value">' +
+          '<div class="color-swatch" style="background:' + team.color + '"' +
+               ' onclick="cycleColor(' + i + ')"></div>' +
+          '<input type="text" value="' + escapeHtml(team.name) + '"' +
+               ' oninput="wizardTeams[' + i + '].name = this.value">' +
           (wizardTeams.length > 2
-            ? '<button class="btn btn-secondary" onclick="removeTeam(' + i + ')">Entfernen</button>'
-            : '<span style="color:var(--text-dim); font-size:11px; padding:0 8px; text-align:center;">Pflicht</span>');
+            ? '<button class="btn btn-secondary" onclick="removeTeam(' + i + ')">' +
+                i18n.t('common.remove') +
+              '</button>'
+            : '<span style="color:var(--text-dim); font-size:11px; padding:0 8px; text-align:center;">' +
+                i18n.t('common.required') +
+              '</span>');
         wrap.appendChild(row);
       });
       $('add-team-btn').style.display = wizardTeams.length >= 4 ? 'none' : 'inline-flex';
@@ -567,8 +641,9 @@
 
     function addTeamRow() {
       if (wizardTeams.length >= 4) return;
+      const names = defaultTeamNames();
       wizardTeams.push({
-        name:  DEFAULT_NAMES[wizardTeams.length],
+        name:  names[wizardTeams.length],
         color: DEFAULT_COLORS[wizardTeams.length],
       });
       renderWizardTeams();
@@ -583,60 +658,89 @@
     async function wizardSubmit() {
       const payload = {
         name:  $('w-name').value.trim() || 'Mohjos DamageRace',
-        goal:  parseInt($('w-goal').value) || 100000,
+        goal:  parseInt($('w-goal').value, 10) || 100000,
         mode:  currentMode,
         teams: wizardTeams,
       };
       try {
-        const d = await fetchJson('/api/event', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(payload),
+        const data = await fetchJson('/api/event', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(payload),
         });
-        if (d.ok) { toast('Event erstellt.'); closeWizard(); refresh(); }
-        else toast(d.error || 'Fehler', 'err');
-      } catch (_) {}
+        if (data.ok) {
+          toast(i18n.t('admin.toast.created'));
+          closeWizard();
+          refresh();
+        } else {
+          toast(data.error || i18n.t('common.error'), 'err');
+        }
+      } catch (_) { /* handled */ }
     }
 
     async function setGoal() {
-      const v = parseInt($('i-goal').value);
-      if (!v) return;
-      const d = await fetchJson('/api/event/set', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({goal: v}),
+      const value = parseInt($('i-goal').value, 10);
+      if (!value) return;
+      const data = await fetchJson('/api/event/set', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ goal: value }),
       });
-      if (d.ok) { toast('Ziel aktualisiert.'); $('i-goal').value=''; refresh(); }
+      if (data.ok) {
+        toast(i18n.t('admin.toast.goal_updated'));
+        $('i-goal').value = '';
+        refresh();
+      }
     }
 
     async function togglePause() {
-      const paused = !(latest && latest.event && latest.event.paused);
+      const nowPaused = !(latest && latest.event && latest.event.paused);
       await fetchJson('/api/event/pause', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({paused}),
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ paused: nowPaused }),
       });
       refresh();
     }
 
     async function resetEvent() {
-      if (!confirm('Wirklich alle Damage-Werte zuruecksetzen?')) return;
+      if (!confirm(i18n.t('common.confirm_reset'))) return;
       await fetchJson('/api/event/set', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({reset: true}),
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ reset: true }),
       });
-      toast('Event zurueckgesetzt.');
+      toast(i18n.t('admin.toast.reset_done'));
       refresh();
     }
 
     async function regenerate(scope, teamId) {
-      if (!confirm('Alten Invite-Link ungueltig machen und neuen erstellen?')) return;
-      const d = await fetchJson('/api/event/invite/regenerate', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({scope, team_id: teamId}),
+      if (!confirm(i18n.t('common.confirm_regen'))) return;
+      const data = await fetchJson('/api/event/invite/regenerate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ scope: scope, team_id: teamId }),
       });
-      if (d.ok) { toast('Neuer Link generiert.'); refresh(); }
+      if (data.ok) {
+        toast(i18n.t('admin.toast.new_link'));
+        refresh();
+      }
     }
 
+    // Expose handlers used by inline onclicks.
+    Object.assign(window, {
+      openWizard, closeWizard, selectMode, cycleColor, addTeamRow,
+      removeTeam, wizardSubmit, setGoal, togglePause, resetEvent,
+      regenerate, copyText,
+    });
+    window.wizardTeams = wizardTeams;
+
+    i18n.onChange(function () {
+      if (latest && latest.event) render(latest); else renderEmpty();
+    });
+
     refresh();
-    setInterval(refresh, 2000);
+    setInterval(refresh, POLL_MS);
   </script>
 </body>
 </html>

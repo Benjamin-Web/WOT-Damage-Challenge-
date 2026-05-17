@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mohjos DamageRace — Beitreten</title>
+  <title>Mohjos DamageRace — Join</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -13,7 +13,9 @@
       min-height: 100vh;
       display: flex; align-items: center; justify-content: center;
       padding: 24px;
+      position: relative;
     }
+    .lang-bar { position: fixed; top: 20px; right: 24px; z-index: 5; }
     .join-card {
       position: relative;
       width: 100%; max-width: 460px;
@@ -48,10 +50,7 @@
       color: var(--text-muted);
       margin-bottom: 6px;
     }
-    .ev-name {
-      font-size: 22px; font-weight: 800;
-      letter-spacing: -0.4px;
-    }
+    .ev-name { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; }
     .team-pill {
       display: inline-flex; align-items: center; gap: 8px;
       margin-top: 12px;
@@ -67,25 +66,23 @@
       box-shadow: 0 0 8px currentColor;
     }
     .join-body { padding: 28px 32px 32px; }
-    .err-box {
+    .err-box, .ok-box {
       display: none;
       margin-top: 14px;
-      padding: 10px 14px;
+      padding: 12px 14px;
+      border-radius: var(--r-sm);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .err-box {
       background: var(--md3-error-container);
       border: 1px solid rgba(207, 102, 121, 0.3);
-      border-radius: var(--r-sm);
       color: var(--md3-error-strong);
-      font-size: 13px;
     }
     .ok-box {
-      display: none;
-      margin-top: 14px;
-      padding: 14px;
       background: var(--md3-success-container);
       border: 1px solid rgba(0, 230, 118, 0.3);
-      border-radius: var(--r-sm);
       color: var(--md3-success);
-      font-size: 13px;
       font-weight: 600;
     }
     .info-row {
@@ -97,88 +94,88 @@
     }
     .info-row strong { color: var(--md3-primary); }
     button#btn { margin-top: 18px; }
-    .invalid-screen {
-      text-align: center;
-      padding: 60px 32px;
-    }
-    .invalid-screen .x {
-      font-size: 48px;
-      color: var(--md3-error-strong);
-      margin-bottom: 12px;
-    }
+    .invalid-screen { text-align: center; padding: 60px 32px; }
+    .invalid-screen .x { font-size: 48px; color: var(--md3-error-strong); margin-bottom: 12px; }
   </style>
 </head>
 <body class="page">
+  <div class="lang-bar" id="lang-bar"></div>
+
   <div class="join-card" id="card">
-    <div id="loading" style="padding: 60px; text-align: center; color: var(--text-muted);">
-      Pruefe Einladungslink…
-    </div>
+    <div id="loading" style="padding: 60px; text-align: center; color: var(--text-muted);"
+         data-i18n="join.checking_link">Pruefe Einladungslink…</div>
   </div>
 
+  <script src="/i18n.js"></script>
   <script>
+    i18n.mountToggle(document.getElementById('lang-bar'));
+
     const token = window.location.pathname.split('/').pop();
 
-    async function init() {
-      try {
-        const res = await fetch('/api/invite/' + encodeURIComponent(token));
-        const data = await res.json();
-        if (!data.ok) { return showInvalid(); }
-        render(data.kind, data);
-      } catch (e) {
-        showInvalid();
-      }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (c) {
+        return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+      });
     }
 
     function showInvalid() {
-      document.getElementById('card').innerHTML = `
-        <div class="invalid-screen">
-          <div class="x">✕</div>
-          <div style="font-size:18px; font-weight:700;">Einladungslink ungueltig</div>
-          <div style="margin-top:8px; color:var(--text-muted); font-size:13px;">
-            Bitte vom Veranstalter einen neuen Link anfordern.
-          </div>
-        </div>`;
+      document.getElementById('card').innerHTML =
+        '<div class="invalid-screen">' +
+          '<div class="x">✕</div>' +
+          '<div style="font-size:18px; font-weight:700;">' + i18n.t('join.wrong') + '</div>' +
+          '<div style="margin-top:8px; color:var(--text-muted); font-size:13px;">' +
+            i18n.t('join.wrong_hint') +
+          '</div>' +
+        '</div>';
     }
 
     function render(kind, info) {
       const color = info.team_color || '#ffd700';
       document.documentElement.style.setProperty('--accent', color);
       document.documentElement.style.setProperty('--accent-dark', color);
-      document.documentElement.style.setProperty('--accent-tint', color.replace(')', ', 0.12)').replace('rgb', 'rgba'));
 
-      const teamPill = kind === 'team'
-        ? `<div class="team-pill" style="background:${color}22; border-color:${color}66; color:${color}">
-             <span class="dot" style="background:${color}; color:${color}"></span>
-             ${escapeHtml(info.team_name)}
-           </div>`
-        : `<div style="margin-top:12px; font-size:13px; color:var(--text-muted);">
-             Allgemeiner Beitritt — Team wird vom Admin zugewiesen
-           </div>`;
+      const teamBlock = kind === 'team'
+        ? '<div class="team-pill" style="background:' + color + '22; border-color:' + color + '66; color:' + color + '">' +
+            '<span class="dot" style="background:' + color + '"></span>' +
+            escapeHtml(info.team_name) +
+          '</div>'
+        : '<div style="margin-top:12px; font-size:13px; color:var(--text-muted);">' +
+            i18n.t('join.assign_admin') +
+          '</div>';
 
-      document.getElementById('card').innerHTML = `
-        <div class="join-top">
-          <div class="logo-mark" style="background: linear-gradient(135deg, ${color}, ${color}cc)">M</div>
-          <div class="ev-label">Du wirst eingeladen zu</div>
-          <div class="ev-name">${escapeHtml(info.event_name)}</div>
-          ${teamPill}
-        </div>
-        <div class="join-body">
-          <label for="name">Dein WoT-Account-Name</label>
-          <input type="text" id="name" placeholder="z.B. Mohjo_beist" autofocus>
-          <div class="err-box" id="err"></div>
-          <div class="ok-box"  id="ok"></div>
-          <button id="btn" class="btn btn-primary btn-block" style="background:${color}" onclick="doJoin()">
-            Beitreten
-          </button>
-          <div class="info-row">
-            Nach dem Beitritt installierst du die <strong>DamageRace-Exe</strong> (vom Veranstalter erhalten)
-            mit demselben Namen. Dein Damage wird dann automatisch fuer das Event gezaehlt.
-          </div>
-        </div>`;
+      document.getElementById('card').innerHTML =
+        '<div class="join-top">' +
+          '<div class="logo-mark" style="background:linear-gradient(135deg, ' + color + ', ' + color + 'cc)">M</div>' +
+          '<div class="ev-label">' + i18n.t('join.invited_to') + '</div>' +
+          '<div class="ev-name">' + escapeHtml(info.event_name) + '</div>' +
+          teamBlock +
+        '</div>' +
+        '<div class="join-body">' +
+          '<label for="name">' + i18n.t('join.wot_name') + '</label>' +
+          '<input type="text" id="name" placeholder="' + i18n.t('join.wot_placeholder') + '" autofocus>' +
+          '<div class="err-box" id="err"></div>' +
+          '<div class="ok-box" id="ok"></div>' +
+          '<button id="btn" class="btn btn-primary btn-block" style="background:' + color + '">' +
+            i18n.t('join.submit') +
+          '</button>' +
+          '<div class="info-row">' + i18n.t('join.after_info') + '</div>' +
+        '</div>';
 
-      document.getElementById('name').addEventListener('keydown', e => {
+      document.getElementById('btn').addEventListener('click', doJoin);
+      document.getElementById('name').addEventListener('keydown', function (e) {
         if (e.key === 'Enter') doJoin();
       });
+    }
+
+    async function init() {
+      try {
+        const res = await fetch('/api/invite/' + encodeURIComponent(token));
+        const data = await res.json();
+        if (!data.ok) { showInvalid(); return; }
+        render(data.kind, data);
+      } catch (_) {
+        showInvalid();
+      }
     }
 
     async function doJoin() {
@@ -186,46 +183,50 @@
       const btn  = document.getElementById('btn');
       const err  = document.getElementById('err');
       const ok   = document.getElementById('ok');
-      err.style.display = 'none'; ok.style.display = 'none';
+      err.style.display = 'none';
+      ok.style.display = 'none';
       if (!name) return;
       btn.disabled = true;
-      btn.textContent = 'Beitreten…';
+      btn.textContent = i18n.t('join.submitting');
       try {
         const res = await fetch('/api/join', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({token, wot_name: name}),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: token, wot_name: name }),
         });
         const data = await res.json();
         if (data.ok) {
-          const teamStr = data.team ? ' (Team ' + escapeHtml(data.team.name) + ')' : '';
-          ok.innerHTML = '✓ Beitritt erfolgreich' + teamStr + '!<br><br>' +
-            '<strong>Naechster Schritt:</strong> Lade die <strong>DamageRace.exe</strong> ' +
-            '(<a href="https://github.com/Benjamin-Web/WOT-Damage-Challenge-/releases" target="_blank" style="color:var(--md3-primary);">GitHub Releases</a>), ' +
-            'oeffne sie, klick "An Event teilnehmen" und gib diesen Code ein:<br><br>' +
-            '<code style="display:block; background:var(--md3-surface-dim); padding:10px; border-radius:6px; color:var(--md3-primary); font-size:14px; word-break:break-all;">' +
-            escapeHtml(token) + '</code>';
+          const teamSuffix = data.team
+            ? i18n.t('join.team_suffix', { team: escapeHtml(data.team.name) })
+            : '';
+          const link = '<a href="https://github.com/Benjamin-Web/WOT-Damage-Challenge-/releases" ' +
+                       'target="_blank" rel="noopener" style="color:var(--md3-primary);">' +
+                       i18n.t('join.releases_link') + '</a>';
+          ok.innerHTML =
+            i18n.t('join.success_prefix') + teamSuffix + '<br><br>' +
+            i18n.t('join.next_step', { link: link }) +
+            '<br><code style="display:block; background:var(--md3-surface-dim); padding:10px; ' +
+              'border-radius:6px; color:var(--md3-primary); font-size:14px; word-break:break-all; ' +
+              'margin-top:10px;">' +
+              escapeHtml(data.streamer_token) +
+            '</code>';
           ok.style.display = 'block';
-          btn.textContent = 'Erledigt';
+          btn.textContent = i18n.t('join.done');
         } else {
-          err.textContent = data.message || data.error || 'Beitritt fehlgeschlagen';
+          err.textContent = data.error || i18n.t('join.error_failed');
           err.style.display = 'block';
           btn.disabled = false;
-          btn.textContent = 'Beitreten';
+          btn.textContent = i18n.t('join.submit');
         }
-      } catch (e) {
-        err.textContent = 'Verbindungsfehler.';
+      } catch (_) {
+        err.textContent = i18n.t('join.error_connection');
         err.style.display = 'block';
         btn.disabled = false;
-        btn.textContent = 'Beitreten';
+        btn.textContent = i18n.t('join.submit');
       }
     }
 
-    function escapeHtml(s) {
-      return String(s).replace(/[&<>"']/g, c => ({
-        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-      }[c]));
-    }
-
+    i18n.onChange(init);
     init();
   </script>
 </body>

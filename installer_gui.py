@@ -1,229 +1,511 @@
-"""
-installer_gui.py — Mohjos DamageRace Desktop-App
+"""DamageRace desktop client.
 
-Welcome-Screen mit zwei Modi:
-  1. Veranstalter (Organizer) — Twitch-OAuth-Login -> Event-Wizard
-  2. Teilnehmer (Streamer)    — Invite-Code -> WoT-Mod installieren
+Two flows live behind the welcome screen:
 
-Branding: Heist-Bot Material Design 3, Gold (#ffd700), Inter.
+* Organizer — Twitch OAuth login -> event wizard / dashboard.
+* Participant — Invite code -> WoT mod installation.
+
+The application talks to the public DamageRace server via JSON HTTP. It also
+detects the local World of Tanks installation through the registry and a
+handful of common paths.
 """
-import sys
-import os
+from __future__ import annotations
+
 import json
+import logging
+import os
 import shutil
+import sys
 import threading
-import webbrowser
-import urllib.request
-import urllib.parse
+import time
 import urllib.error
+import urllib.parse
+import urllib.request
+import webbrowser
+from typing import Any
+
 import tkinter as tk
 from tkinter import filedialog
 
 import customtkinter as ctk
 
 try:
-    import winreg
+    import winreg  # type: ignore[import-not-found]
     HAS_WINREG = True
 except ImportError:
     HAS_WINREG = False
 
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+log = logging.getLogger("damagerace.client")
+
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-# ─── Brand-Tokens (Heist Bot M3 Gold) ─────────────────────────────────────────
+# ── Brand tokens ──────────────────────────────────────────────────────────────
 
-BG      = "#0d0d14"
-BG2     = "#17171f"
-BG3     = "#1e1e28"
-BG4     = "#262631"
-BDR     = "#2a2a35"
-ACCENT  = "#ffd700"
-ACCENT2 = "#efb700"
-TWITCH  = "#9146ff"
-TWITCH2 = "#7d2def"
-GREEN   = "#00e676"
-RED     = "#cf6679"
-WHITE   = "#f3f4f6"
-GRAY    = "#9ca3af"
-DIM     = "#6b7280"
+BG       = "#0d0d14"
+BG2      = "#17171f"
+BG3      = "#1e1e28"
+BG4      = "#262631"
+BDR      = "#2a2a35"
+ACCENT   = "#ffd700"
+ACCENT2  = "#efb700"
+TWITCH   = "#9146ff"
+TWITCH2  = "#7d2def"
+GREEN    = "#00e676"
+RED      = "#cf6679"
+WARN     = "#ff9800"
+WHITE    = "#f3f4f6"
+GRAY     = "#9ca3af"
+DIM      = "#6b7280"
 
 FONT_FAM = "Inter"
 
-# ─── Config + Ressourcen ──────────────────────────────────────────────────────
+# ── Configuration ─────────────────────────────────────────────────────────────
 
-def _res(rel):
+DEFAULT_SERVER_URL = "https://mohjos-damagerace.duckdns.org"
+SETTINGS_FILE = "damagerace_settings.json"
+
+
+def _resource_path(rel: str) -> str:
     base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, rel)
 
-def _load_cfg():
+
+def _user_settings_path() -> str:
+    home = os.environ.get("APPDATA") or os.path.expanduser("~")
+    folder = os.path.join(home, "MohjosDamageRace")
     try:
-        with open(_res("installer_config.json"), "r") as f:
-            return json.load(f)
-    except Exception:
-        return {"server_url": "https://mohjos-damagerace.duckdns.org",
-                "event_name": "Mohjos DamageRace"}
+        os.makedirs(folder, exist_ok=True)
+    except OSError:
+        folder = os.path.expanduser("~")
+    return os.path.join(folder, SETTINGS_FILE)
 
-_CFG       = _load_cfg()
-SERVER_URL = _CFG.get("server_url", "https://mohjos-damagerace.duckdns.org").rstrip("/")
-WOTMOD_SRC = _res(os.path.join("dist", "mohjos_damagerace.wotmod"))
 
-# ─── HTTP-Helper ──────────────────────────────────────────────────────────────
+def _load_installer_config() -> dict[str, Any]:
+    try:
+        with open(_resource_path("installer_config.json"), "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return {"server_url": DEFAULT_SERVER_URL, "event_name": "Mohjos DamageRace"}
 
-def http_json(method, path, data=None, cookies=None):
+
+def _load_user_settings() -> dict[str, Any]:
+    try:
+        with open(_user_settings_path(), "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_user_settings(data: dict[str, Any]) -> None:
+    try:
+        with open(_user_settings_path(), "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2)
+    except OSError as exc:
+        log.warning("Could not persist settings: %s", exc)
+
+
+_CFG = _load_installer_config()
+SERVER_URL = _CFG.get("server_url", DEFAULT_SERVER_URL).rstrip("/")
+WOTMOD_SRC = _resource_path(os.path.join("dist", "mohjos_damagerace.wotmod"))
+
+# ── i18n ──────────────────────────────────────────────────────────────────────
+
+SUPPORTED_LANGS = ("de", "en")
+DEFAULT_LANG = "de"
+
+_MESSAGES: dict[str, dict[str, str]] = {
+    "app.title":                {"de": "Mohjos DamageRace",
+                                 "en": "Mohjos DamageRace"},
+    "app.subtitle":             {"de": "World of Tanks Community Damage Race",
+                                 "en": "World of Tanks Community Damage Race"},
+    "welcome.prompt":           {"de": "WOFUER MOECHTEST DU ES NUTZEN?",
+                                 "en": "WHAT DO YOU WANT TO DO?"},
+    "welcome.organizer_title":  {"de": "Event veranstalten",
+                                 "en": "Host an event"},
+    "welcome.organizer_desc":   {"de": "Du erstellst ein eigenes Event,\nkonfigurierst Teams und laedst Streamer ein.",
+                                 "en": "Create your own event, configure\nteams and invite streamers."},
+    "welcome.organizer_badge":  {"de": "Veranstalter", "en": "Organizer"},
+    "welcome.participant_title":{"de": "An Event teilnehmen",
+                                 "en": "Join an event"},
+    "welcome.participant_desc": {"de": "Du hast einen Invite-Code von einem\nVeranstalter und willst mitmachen.",
+                                 "en": "You have an invite code from an\norganizer and want to participate."},
+    "welcome.participant_badge":{"de": "Streamer", "en": "Streamer"},
+    "common.back":              {"de": "Zurueck", "en": "Back"},
+    "common.cancel":            {"de": "Abbrechen", "en": "Cancel"},
+    "common.copy":              {"de": "Kopieren", "en": "Copy"},
+    "common.required":          {"de": "Pflicht", "en": "Required"},
+    "common.refresh":           {"de": "Aktualisieren", "en": "Refresh"},
+    "common.error":             {"de": "Fehler", "en": "Error"},
+    "server.label":             {"de": "Server", "en": "Server"},
+
+    "login.title":              {"de": "Veranstalter-Login",
+                                 "en": "Organizer login"},
+    "login.subtitle":           {"de": "Mit Twitch anmelden, um Events zu erstellen",
+                                 "en": "Sign in with Twitch to manage events"},
+    "login.button":             {"de": "🟣  Mit Twitch anmelden",
+                                 "en": "🟣  Sign in with Twitch"},
+    "login.browser_hint":       {"de": "Browser geoeffnet — bitte mit Twitch anmelden…",
+                                 "en": "Browser opened — please sign in on Twitch…"},
+    "login.afterhint":          {"de": "Hinweis: Es oeffnet sich dein Browser. Nach erfolgreicher\nTwitch-Anmeldung kommst du automatisch hierher zurueck.",
+                                 "en": "Note: Your browser opens. After signing in with\nTwitch you are returned to this window automatically."},
+    "login.timeout":            {"de": "Login-Timeout. Bitte erneut versuchen.",
+                                 "en": "Login timed out. Please try again."},
+
+    "dash.title":               {"de": "Dein Event", "en": "Your event"},
+    "dash.logged_in_as":        {"de": "Eingeloggt als {name}",
+                                 "en": "Signed in as {name}"},
+    "dash.mode_goal":           {"de": "Modus: {mode} · Ziel: {goal}",
+                                 "en": "Mode: {mode} · Goal: {goal}"},
+    "dash.mode.coop":           {"de": "Coop", "en": "Coop"},
+    "dash.mode.versus":         {"de": "Versus", "en": "Versus"},
+    "dash.stat.remaining":      {"de": "Restdamage", "en": "Remaining"},
+    "dash.stat.dealt":          {"de": "Verursacht", "en": "Dealt"},
+    "dash.obs_url":             {"de": "OBS BROWSER-SOURCE URL",
+                                 "en": "OBS BROWSER SOURCE URL"},
+    "dash.teams_section":       {"de": "TEAMS & EINLADUNGSLINKS",
+                                 "en": "TEAMS & INVITE LINKS"},
+    "dash.team.summary":        {"de": "{damage} Damage · {n} Mitglieder",
+                                 "en": "{damage} damage · {n} members"},
+    "dash.team.copy_code":      {"de": "Code", "en": "Code"},
+    "dash.reset":               {"de": "↻ Reset", "en": "↻ Reset"},
+    "dash.delete":              {"de": "🗑 Event loeschen",
+                                 "en": "🗑 Delete event"},
+    "dash.refresh":             {"de": "🔄 Aktualisieren",
+                                 "en": "🔄 Refresh"},
+
+    "wizard.heading":           {"de": "Noch kein Event — leg eines an:",
+                                 "en": "No event yet — create one:"},
+    "wizard.name":              {"de": "EVENT-NAME", "en": "EVENT NAME"},
+    "wizard.name_hint":         {"de": "z.B. Mohjos Sommer-Cup",
+                                 "en": "e.g. Mohjos Summer Cup"},
+    "wizard.goal":              {"de": "SCHADEN-ZIEL", "en": "DAMAGE GOAL"},
+    "wizard.mode":              {"de": "MODUS", "en": "MODE"},
+    "wizard.mode_coop":         {"de": "Kooperativ", "en": "Cooperative"},
+    "wizard.mode_versus":       {"de": "Versus", "en": "Versus"},
+    "wizard.teams":             {"de": "TEAMS (2-4)", "en": "TEAMS (2-4)"},
+    "wizard.add_team":          {"de": "+ Team hinzufuegen",
+                                 "en": "+ Add team"},
+    "wizard.submit":            {"de": "Event erstellen",
+                                 "en": "Create event"},
+    "wizard.creating":          {"de": "Event wird erstellt…",
+                                 "en": "Creating event…"},
+    "wizard.error":             {"de": "Fehler: {detail}",
+                                 "en": "Error: {detail}"},
+
+    "join.title":               {"de": "An Event teilnehmen",
+                                 "en": "Join an event"},
+    "join.subtitle":            {"de": "Gib den Einladungscode deines Veranstalters ein",
+                                 "en": "Enter the invite code from your organizer"},
+    "join.code_label":          {"de": "EINLADUNGSCODE",
+                                 "en": "INVITE CODE"},
+    "join.code_hint":           {"de": "Vom Veranstalter erhalten (z.B. tm_AbCd1234)",
+                                 "en": "Received from the organizer (e.g. tm_AbCd1234)"},
+    "join.wot_label":           {"de": "DEIN WORLD-OF-TANKS NAME",
+                                 "en": "YOUR WORLD OF TANKS NAME"},
+    "join.wot_hint":            {"de": "Exakt wie im Spiel — Gross-/Kleinschreibung beachten",
+                                 "en": "Exactly as in-game — case-sensitive"},
+    "join.wot_placeholder":     {"de": "z.B. Mohjo_beist", "en": "e.g. Mohjo_beist"},
+    "join.detect.found":        {"de": "✓  World of Tanks · Version {version}",
+                                 "en": "✓  World of Tanks · version {version}"},
+    "join.detect.no_res_mods":  {"de": "!  WoT gefunden, res_mods/ fehlt — bitte WoT einmal starten",
+                                 "en": "!  WoT found but res_mods/ missing — launch WoT once"},
+    "join.detect.missing":      {"de": "✕  World of Tanks nicht gefunden",
+                                 "en": "✕  World of Tanks not found"},
+    "join.pick_folder":         {"de": "Anderen Ordner waehlen",
+                                 "en": "Pick another folder"},
+    "join.install_btn":         {"de": "Beitreten und Mod installieren",
+                                 "en": "Join and install mod"},
+    "join.connecting":          {"de": "Verbinde mit Server…",
+                                 "en": "Connecting to server…"},
+    "join.installing":          {"de": "Installiere Mod…",
+                                 "en": "Installing mod…"},
+    "join.need_fields":         {"de": "Bitte Einladungscode UND WoT-Name eingeben.",
+                                 "en": "Please provide both an invite code and your WoT name."},
+    "join.wot_missing":         {"de": "WoT-Ordner fehlt.",
+                                 "en": "WoT folder not selected."},
+    "join.success":             {"de": "Beigetreten zu \"{event}\"{team}\nMod installiert (WoT {version})\n\nStarte WoT neu — fertig!",
+                                 "en": "Joined \"{event}\"{team}\nMod installed (WoT {version})\n\nRestart WoT — done!"},
+    "join.success_team":        {"de": " · Team: {name}",
+                                 "en": " · team: {name}"},
+    "join.failed":              {"de": "Beitritt fehlgeschlagen",
+                                 "en": "Could not join the event"},
+    "join.done":                {"de": "Erledigt ✓",
+                                 "en": "Done ✓"},
+
+    "mod.error.no_exe":         {"de": "WorldOfTanks.exe nicht im Ordner.",
+                                 "en": "WorldOfTanks.exe not found in folder."},
+    "mod.error.no_resmods":     {"de": "Kein Versionsordner in res_mods/ gefunden.\nBitte WoT einmal starten.",
+                                 "en": "No version folder in res_mods/.\nLaunch WoT once first."},
+    "mod.error.write":          {"de": "Mod-Installation fehlgeschlagen: {detail}",
+                                 "en": "Mod install failed: {detail}"},
+}
+
+_settings_cache = _load_user_settings()
+_current_lang = _settings_cache.get("lang") if _settings_cache.get("lang") in SUPPORTED_LANGS else DEFAULT_LANG
+
+
+def get_lang() -> str:
+    return _current_lang
+
+
+def set_lang(lang: str) -> None:
+    global _current_lang
+    if lang not in SUPPORTED_LANGS:
+        return
+    _current_lang = lang
+    _settings_cache["lang"] = lang
+    _save_user_settings(_settings_cache)
+
+
+def t(key: str, **params: object) -> str:
+    entry = _MESSAGES.get(key)
+    if not entry:
+        return key
+    text = entry.get(_current_lang, entry.get(DEFAULT_LANG, key))
+    if params:
+        try:
+            text = text.format(**params)
+        except (KeyError, IndexError):
+            pass
+    return text
+
+
+def fmt_int(value: int) -> str:
+    sep = "," if _current_lang == "en" else "."
+    return f"{int(value):,}".replace(",", sep)
+
+
+# ── HTTP helper ───────────────────────────────────────────────────────────────
+
+class HttpResult:
+    __slots__ = ("ok", "data", "cookies")
+
+    def __init__(self, ok: bool, data: dict[str, Any], cookies: dict[str, str]) -> None:
+        self.ok = ok
+        self.data = data
+        self.cookies = cookies
+
+
+def http_json(method: str, path: str, data: dict | None = None,
+              cookies: dict | None = None, *, timeout: int = 15) -> HttpResult:
     url = SERVER_URL + path
-    body = None
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "MohjosDamageRace-Client/1.0",
+        "Accept-Language": _current_lang,
+    }
     if cookies:
-        headers["Cookie"] = "; ".join("{}={}".format(k, v) for k, v in cookies.items())
-    if data is not None:
-        body = json.dumps(data).encode()
-    req = urllib.request.Request(url, data=body, method=method, headers=headers)
+        headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
+    body = json.dumps(data).encode() if data is not None else None
+    request = urllib.request.Request(url, data=body, method=method, headers=headers)
+
     try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            text = r.read().decode()
-            set_cookie = r.headers.get("Set-Cookie")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            text = response.read().decode("utf-8", "replace")
             new_cookies = dict(cookies or {})
+            set_cookie = response.headers.get("Set-Cookie")
             if set_cookie:
-                # primitive Set-Cookie-Parser
                 first = set_cookie.split(";", 1)[0]
                 if "=" in first:
-                    k, v = first.split("=", 1)
-                    new_cookies[k.strip()] = v.strip()
+                    name, value = first.split("=", 1)
+                    new_cookies[name.strip()] = value.strip()
             try:
-                return True, json.loads(text), new_cookies
-            except Exception:
-                return True, {"raw": text}, new_cookies
-    except urllib.error.HTTPError as e:
+                payload = json.loads(text)
+            except json.JSONDecodeError:
+                payload = {"raw": text}
+            return HttpResult(True, payload, new_cookies)
+    except urllib.error.HTTPError as exc:
         try:
-            return False, json.loads(e.read().decode()), cookies or {}
-        except Exception:
-            return False, {"error": "HTTP {}".format(e.code)}, cookies or {}
-    except Exception as e:
-        return False, {"error": str(e)}, cookies or {}
+            payload = json.loads(exc.read().decode("utf-8", "replace"))
+        except (json.JSONDecodeError, OSError):
+            payload = {"error": f"HTTP {exc.code}"}
+        return HttpResult(False, payload, cookies or {})
+    except urllib.error.URLError as exc:
+        return HttpResult(False, {"error": str(exc.reason)}, cookies or {})
+    except Exception as exc:  # pragma: no cover - defensive
+        log.exception("Unexpected HTTP failure")
+        return HttpResult(False, {"error": str(exc)}, cookies or {})
 
-# ─── WoT-Erkennung ────────────────────────────────────────────────────────────
 
-_REG_KEYS = [
-    (r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{1EAC1D02-C6AC-4FA6-9A44-96258C37C812}", "InstallLocation"),
-    (r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{1EAC1D02-C6AC-4FA6-9A44-96258C37C812}", "InstallLocation"),
+# ── World of Tanks detection ──────────────────────────────────────────────────
+
+_REGISTRY_KEYS = [
+    (r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{1EAC1D02-C6AC-4FA6-9A44-96258C37C812}",
+     "InstallLocation"),
+    (r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{1EAC1D02-C6AC-4FA6-9A44-96258C37C812}",
+     "InstallLocation"),
 ]
-_COMMON = [
+_COMMON_PATHS = (
     r"C:\Games\World_of_Tanks",
     r"C:\Games\World_of_Tanks_EU",
     r"D:\Games\World_of_Tanks",
     r"C:\Program Files (x86)\World_of_Tanks",
-]
+)
 
-def find_wot():
+
+def find_wot() -> str:
     if HAS_WINREG:
-        for sub, val in _REG_KEYS:
+        for subkey, value_name in _REGISTRY_KEYS:
             try:
-                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub) as k:
-                    p, _ = winreg.QueryValueEx(k, val)
-                    if p and os.path.isfile(os.path.join(p, "WorldOfTanks.exe")):
-                        return p
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, subkey) as key:
+                    path, _ = winreg.QueryValueEx(key, value_name)
+                    if path and os.path.isfile(os.path.join(path, "WorldOfTanks.exe")):
+                        return path
             except (FileNotFoundError, OSError):
                 pass
         try:
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam") as k:
-                steam, _ = winreg.QueryValueEx(k, "InstallPath")
-            p = os.path.join(steam, "steamapps", "common", "World of Tanks")
-            if os.path.isfile(os.path.join(p, "WorldOfTanks.exe")):
-                return p
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam") as key:
+                steam, _ = winreg.QueryValueEx(key, "InstallPath")
+            candidate = os.path.join(steam, "steamapps", "common", "World of Tanks")
+            if os.path.isfile(os.path.join(candidate, "WorldOfTanks.exe")):
+                return candidate
         except (FileNotFoundError, OSError):
             pass
-    for p in _COMMON:
-        if os.path.isfile(os.path.join(p, "WorldOfTanks.exe")):
-            return p
+    for path in _COMMON_PATHS:
+        if os.path.isfile(os.path.join(path, "WorldOfTanks.exe")):
+            return path
     return ""
 
-def find_version(wot_path):
+
+def find_version(wot_path: str) -> str | None:
     res_mods = os.path.join(wot_path, "res_mods")
     if not os.path.isdir(res_mods):
         return None
-    versions = sorted(
-        [d for d in os.listdir(res_mods)
-         if os.path.isdir(os.path.join(res_mods, d)) and d[:1].isdigit()],
-        reverse=True)
+    try:
+        versions = sorted(
+            (d for d in os.listdir(res_mods)
+             if os.path.isdir(os.path.join(res_mods, d)) and d[:1].isdigit()),
+            reverse=True,
+        )
+    except OSError:
+        return None
     return versions[0] if versions else None
 
-def install_mod(wot_path, wot_name, streamer_token):
+
+def install_mod(wot_path: str, wot_name: str, streamer_token: str
+                ) -> tuple[bool, str]:
     if not os.path.isfile(os.path.join(wot_path, "WorldOfTanks.exe")):
-        return False, "WorldOfTanks.exe nicht im Ordner."
+        return False, t("mod.error.no_exe")
     version = find_version(wot_path)
     if not version:
-        return False, "Kein Versionsordner in res_mods/ gefunden.\nBitte WoT einmal starten."
-    mods_dir = os.path.join(wot_path, "mods")
-    os.makedirs(mods_dir, exist_ok=True)
-    shutil.copy2(WOTMOD_SRC, os.path.join(mods_dir, "mohjos_damagerace.wotmod"))
-    cfg_dir = os.path.join(wot_path, "res_mods", version, "mods", "damagerace")
-    os.makedirs(cfg_dir, exist_ok=True)
-    with open(os.path.join(cfg_dir, "config.json"), "w") as f:
-        json.dump({
-            "server_url":         SERVER_URL,
-            "streamer_token":     streamer_token,
-            "streamer_name":      wot_name,
-            "enabled":            True,
-            "send_interval_ms":   200,
-            "allowed_arena_types": [1, 7],
-        }, f, indent=2)
+        return False, t("mod.error.no_resmods")
+    try:
+        mods_dir = os.path.join(wot_path, "mods")
+        os.makedirs(mods_dir, exist_ok=True)
+        shutil.copy2(WOTMOD_SRC, os.path.join(mods_dir, "mohjos_damagerace.wotmod"))
+        config_dir = os.path.join(wot_path, "res_mods", version, "mods", "damagerace")
+        os.makedirs(config_dir, exist_ok=True)
+        with open(os.path.join(config_dir, "config.json"), "w", encoding="utf-8") as fh:
+            json.dump({
+                "server_url":         SERVER_URL,
+                "streamer_token":     streamer_token,
+                "streamer_name":      wot_name,
+                "enabled":            True,
+                "send_interval_ms":   200,
+                "allowed_arena_types": [1, 7],
+            }, fh, indent=2)
+    except OSError as exc:
+        return False, t("mod.error.write", detail=str(exc))
     return True, version
 
-# ─── Brand-Logo Widget ────────────────────────────────────────────────────────
 
-def make_logo(parent, big=False):
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def make_logo(parent: tk.Misc, *, big: bool = False) -> tk.Frame:
     size = 56 if big else 32
     font_size = 28 if big else 16
-    fr = tk.Frame(parent, bg=ACCENT, width=size, height=size)
-    fr.pack_propagate(False)
-    lbl = tk.Label(fr, text="M", bg=ACCENT, fg="#000",
-                   font=(FONT_FAM, font_size, "bold"))
-    lbl.place(relx=0.5, rely=0.5, anchor="center")
-    return fr
+    frame = tk.Frame(parent, bg=ACCENT, width=size, height=size)
+    frame.pack_propagate(False)
+    tk.Label(frame, text="M", bg=ACCENT, fg="#000",
+             font=(FONT_FAM, font_size, "bold")
+             ).place(relx=0.5, rely=0.5, anchor="center")
+    return frame
 
-# ─── Hauptfenster ─────────────────────────────────────────────────────────────
+
+# ── Main application ──────────────────────────────────────────────────────────
 
 class App(ctk.CTk):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self.title("Mohjos DamageRace")
-        self.geometry("520x640")
-        self.minsize(520, 640)
+        self.title(t("app.title"))
+        self.geometry("520x680")
+        self.minsize(520, 680)
         self.configure(fg_color=BG)
-        self.cookies = {}
-        self.user = None
+        self.cookies: dict[str, str] = {}
+        self.user: dict[str, Any] | None = None
+        self._wot_path = ""
+        self._wizard_teams: list[dict[str, str]] = []
+        self._wizard_mode = "coop"
         self._center()
         self.show_welcome()
 
-    def _center(self):
+    def _center(self) -> None:
         self.update_idletasks()
-        w, h = self.winfo_width(), self.winfo_height()
-        x = (self.winfo_screenwidth()  - w) // 2
-        y = (self.winfo_screenheight() - h) // 2
-        self.geometry(f"{w}x{h}+{x}+{y}")
+        width, height = self.winfo_width(), self.winfo_height()
+        x = (self.winfo_screenwidth() - width) // 2
+        y = (self.winfo_screenheight() - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
 
-    def _clear(self):
+    def _clear(self) -> None:
         for child in self.winfo_children():
             child.destroy()
 
-    def _topbar(self, parent, title, subtitle="", back=None):
+    # ── Layout helpers ────────────────────────────────────────────────────────
+
+    def _make_lang_toggle(self, parent: tk.Misc) -> ctk.CTkFrame:
+        container = ctk.CTkFrame(parent, fg_color="transparent")
+        for code in SUPPORTED_LANGS:
+            btn = ctk.CTkButton(
+                container, text=code.upper(), width=36, height=24,
+                font=ctk.CTkFont(FONT_FAM, 10, "bold"),
+                fg_color=ACCENT if code == _current_lang else BG3,
+                hover_color=BDR,
+                text_color="#000" if code == _current_lang else GRAY,
+                border_color=BDR, border_width=1, corner_radius=6,
+                command=lambda c=code: self._switch_lang(c),
+            )
+            btn.pack(side="left", padx=1)
+        return container
+
+    def _switch_lang(self, code: str) -> None:
+        if code == _current_lang:
+            return
+        set_lang(code)
+        self.title(t("app.title"))
+        # Re-render the current screen by re-calling the responsible method.
+        # Each screen tracks itself by clearing and rebuilding; the simplest
+        # approach is to call show_welcome / show_organizer_dashboard /
+        # show_participant from the active code path. We hook the latest
+        # screen factory below.
+        renderer = getattr(self, "_active_screen", None)
+        if callable(renderer):
+            renderer()
+
+    def _topbar(self, parent: tk.Misc, title_text: str, subtitle: str = "",
+                back: Any = None) -> None:
         tk.Frame(parent, bg=ACCENT, height=3).pack(fill="x")
         bar = ctk.CTkFrame(parent, fg_color=BG2, corner_radius=0)
         bar.pack(fill="x")
         row = ctk.CTkFrame(bar, fg_color="transparent")
         row.pack(fill="x", padx=22, pady=(18, 18))
+
         if back:
-            ctk.CTkButton(row, text="← Zurueck", width=90, height=28,
+            ctk.CTkButton(row, text="← " + t("common.back"), width=90, height=28,
                           font=ctk.CTkFont(FONT_FAM, 11),
                           fg_color=BG3, hover_color=BDR,
                           text_color=GRAY, border_color=BDR, border_width=1,
                           corner_radius=6, command=back).pack(side="left")
             tk.Frame(row, bg=BG2, width=14).pack(side="left")
-        logo = make_logo(row, big=False)
-        logo.pack(side="left", padx=(0, 12))
+
+        make_logo(row).pack(side="left", padx=(0, 12))
         col = ctk.CTkFrame(row, fg_color="transparent")
-        col.pack(side="left", fill="x")
-        ctk.CTkLabel(col, text=title,
+        col.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(col, text=title_text,
                      font=ctk.CTkFont(FONT_FAM, 18, "bold"),
                      text_color=ACCENT).pack(anchor="w")
         if subtitle:
@@ -231,357 +513,354 @@ class App(ctk.CTk):
                          font=ctk.CTkFont(FONT_FAM, 11),
                          text_color=GRAY).pack(anchor="w")
 
-    # ── Screens ───────────────────────────────────────────────────────────────
+        self._make_lang_toggle(row).pack(side="right")
 
-    def show_welcome(self):
+    def _copy(self, text_value: str | None) -> None:
+        if not text_value:
+            return
+        self.clipboard_clear()
+        self.clipboard_append(text_value)
+        self.update()
+
+    # ── Welcome ───────────────────────────────────────────────────────────────
+
+    def show_welcome(self) -> None:
+        self._active_screen = self.show_welcome
         self._clear()
         tk.Frame(self, bg=ACCENT, height=3).pack(fill="x")
 
-        # Header
-        hdr = ctk.CTkFrame(self, fg_color="transparent")
-        hdr.pack(fill="x", pady=(40, 0))
-        big_logo = tk.Frame(hdr, bg=ACCENT, width=72, height=72)
-        big_logo.pack_propagate(False)
-        big_logo.pack(pady=(0, 16))
-        tk.Label(big_logo, text="M", bg=ACCENT, fg="#000",
-                 font=(FONT_FAM, 36, "bold")).place(relx=0.5, rely=0.5, anchor="center")
+        # Top language toggle (fixed)
+        top = ctk.CTkFrame(self, fg_color="transparent")
+        top.pack(fill="x", padx=20, pady=(14, 0))
+        self._make_lang_toggle(top).pack(side="right")
 
-        ctk.CTkLabel(hdr, text="Mohjos DamageRace",
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(fill="x", pady=(20, 0))
+        logo = tk.Frame(header, bg=ACCENT, width=72, height=72)
+        logo.pack_propagate(False)
+        logo.pack(pady=(0, 16))
+        tk.Label(logo, text="M", bg=ACCENT, fg="#000",
+                 font=(FONT_FAM, 36, "bold")
+                 ).place(relx=0.5, rely=0.5, anchor="center")
+
+        ctk.CTkLabel(header, text=t("app.title"),
                      font=ctk.CTkFont(FONT_FAM, 24, "bold"),
                      text_color=ACCENT).pack()
-        ctk.CTkLabel(hdr, text="World of Tanks Community Damage Race",
+        ctk.CTkLabel(header, text=t("app.subtitle"),
                      font=ctk.CTkFont(FONT_FAM, 12),
                      text_color=GRAY).pack(pady=(4, 0))
 
-        # Body
         body = ctk.CTkFrame(self, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=40, pady=40)
+        body.pack(fill="both", expand=True, padx=40, pady=30)
 
-        ctk.CTkLabel(body, text="WOFUER MOECHTEST DU ES NUTZEN?",
+        ctk.CTkLabel(body, text=t("welcome.prompt"),
                      font=ctk.CTkFont(FONT_FAM, 10, "bold"),
                      text_color=DIM).pack(anchor="w", pady=(0, 12))
 
-        # Veranstalter-Card
-        card1 = self._mode_card(body,
-                                title="Event veranstalten",
-                                desc="Du erstellst ein eigenes Event,\nteams konfigurieren, Streamer einladen.",
-                                badge="Veranstalter",
-                                color=ACCENT,
-                                cmd=self.show_organizer_login)
-        card1.pack(fill="x", pady=(0, 14))
+        self._mode_card(body, t("welcome.organizer_title"),
+                        t("welcome.organizer_desc"),
+                        t("welcome.organizer_badge"),
+                        ACCENT, self.show_organizer_login
+                        ).pack(fill="x", pady=(0, 14))
 
-        # Teilnehmer-Card
-        card2 = self._mode_card(body,
-                                title="An Event teilnehmen",
-                                desc="Du hast einen Invite-Code von einem\nVeranstalter und willst mitmachen.",
-                                badge="Streamer",
-                                color="#03dac6",
-                                cmd=self.show_participant)
-        card2.pack(fill="x")
+        self._mode_card(body, t("welcome.participant_title"),
+                        t("welcome.participant_desc"),
+                        t("welcome.participant_badge"),
+                        "#03dac6", self.show_participant
+                        ).pack(fill="x")
 
-        # Footer
-        ctk.CTkLabel(self,
-                     text=f"Server: {SERVER_URL}",
+        ctk.CTkLabel(self, text=f"{t('server.label')}: {SERVER_URL}",
                      font=ctk.CTkFont(FONT_FAM, 10),
                      text_color=DIM).pack(side="bottom", pady=10)
 
-    def _mode_card(self, parent, title, desc, badge, color, cmd):
+    def _mode_card(self, parent: tk.Misc, title_text: str, desc: str,
+                   badge: str, color: str, command: Any) -> ctk.CTkFrame:
         outer = ctk.CTkFrame(parent, fg_color=BG2, border_color=BDR,
                              border_width=1, corner_radius=12)
         inner = ctk.CTkButton(outer, text="", fg_color="transparent",
                               hover_color=BG3, corner_radius=12,
-                              command=cmd, anchor="w")
-        inner.pack(fill="both", expand=True, padx=0, pady=0)
+                              command=command, anchor="w")
+        inner.pack(fill="both", expand=True)
 
         content = ctk.CTkFrame(inner, fg_color="transparent")
         content.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-        # Badge oben
-        b = ctk.CTkLabel(content, text=badge,
-                         font=ctk.CTkFont(FONT_FAM, 9, "bold"),
-                         text_color=color,
-                         fg_color=BG3, corner_radius=99,
-                         padx=10, pady=2)
-        b.pack(anchor="w", padx=20, pady=(16, 6))
-
-        ctk.CTkLabel(content, text=title,
+        ctk.CTkLabel(content, text=badge,
+                     font=ctk.CTkFont(FONT_FAM, 9, "bold"),
+                     text_color=color, fg_color=BG3, corner_radius=99,
+                     padx=10, pady=2).pack(anchor="w", padx=20, pady=(16, 6))
+        ctk.CTkLabel(content, text=title_text,
                      font=ctk.CTkFont(FONT_FAM, 17, "bold"),
                      text_color=WHITE).pack(anchor="w", padx=20)
         ctk.CTkLabel(content, text=desc,
                      font=ctk.CTkFont(FONT_FAM, 12),
-                     text_color=GRAY, justify="left").pack(anchor="w", padx=20, pady=(4, 18))
-
+                     text_color=GRAY, justify="left"
+                     ).pack(anchor="w", padx=20, pady=(4, 18))
         outer.configure(height=130)
         outer.pack_propagate(False)
         return outer
 
-    # ── Veranstalter: Login ───────────────────────────────────────────────────
+    # ── Organizer login ───────────────────────────────────────────────────────
 
-    def show_organizer_login(self):
+    def show_organizer_login(self) -> None:
+        self._active_screen = self.show_organizer_login
         self._clear()
-        self._topbar(self, "Veranstalter-Login",
-                     "Mit Twitch anmelden um Events zu erstellen",
+        self._topbar(self, t("login.title"), t("login.subtitle"),
                      back=self.show_welcome)
 
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=40, pady=40)
 
-        # Twitch-Button
-        twitch_btn = ctk.CTkButton(body, text="🟣  Mit Twitch anmelden",
-                                   font=ctk.CTkFont(FONT_FAM, 15, "bold"),
-                                   height=52,
-                                   fg_color=TWITCH, hover_color=TWITCH2,
-                                   text_color="#fff",
-                                   corner_radius=8,
-                                   command=self._do_twitch_login)
-        twitch_btn.pack(fill="x")
+        ctk.CTkButton(body, text=t("login.button"),
+                      font=ctk.CTkFont(FONT_FAM, 15, "bold"),
+                      height=52, fg_color=TWITCH, hover_color=TWITCH2,
+                      text_color="#fff", corner_radius=8,
+                      command=self._start_twitch_login).pack(fill="x")
 
-        self.status_lbl = ctk.CTkLabel(body, text="",
-                                       font=ctk.CTkFont(FONT_FAM, 12),
-                                       text_color=GRAY,
-                                       wraplength=420, justify="left")
-        self.status_lbl.pack(anchor="w", pady=(20, 0))
+        self._status_label = ctk.CTkLabel(
+            body, text="", font=ctk.CTkFont(FONT_FAM, 12),
+            text_color=GRAY, wraplength=420, justify="left",
+        )
+        self._status_label.pack(anchor="w", pady=(20, 0))
 
-        ctk.CTkLabel(body,
-                     text="Hinweis: Es oeffnet sich dein Browser. Nach erfolgreicher\n"
-                          "Twitch-Anmeldung kommst du automatisch hier zurueck.",
+        ctk.CTkLabel(body, text=t("login.afterhint"),
                      font=ctk.CTkFont(FONT_FAM, 11),
-                     text_color=DIM, justify="left").pack(anchor="w", pady=(28, 0))
+                     text_color=DIM, justify="left"
+                     ).pack(anchor="w", pady=(28, 0))
 
-    def _do_twitch_login(self):
-        self.status_lbl.configure(text="Browser geoeffnet — bitte mit Twitch anmelden…",
-                                  text_color=GRAY)
-        # Erst Cookie holen (Session anlegen serverseitig)
-        ok, data, cookies = http_json("GET", "/auth/me")
-        if cookies:
-            self.cookies.update(cookies)
-        # Auth-URL oeffnen
+    def _start_twitch_login(self) -> None:
+        self._status_label.configure(text=t("login.browser_hint"), text_color=GRAY)
+        # Allocate a server-side session so the callback can attach the user.
+        result = http_json("GET", "/auth/me")
+        if result.cookies:
+            self.cookies.update(result.cookies)
         webbrowser.open(SERVER_URL + "/auth/twitch/start")
-        # Polling: alle 2s pruefen ob eingeloggt
         threading.Thread(target=self._poll_login, daemon=True).start()
 
-    def _poll_login(self):
-        import time
-        for i in range(120):  # max 4 Minuten
+    def _poll_login(self) -> None:
+        for _ in range(120):  # ~4 minutes
             time.sleep(2)
-            ok, data, cookies = http_json("GET", "/auth/me", cookies=self.cookies)
-            if cookies:
-                self.cookies.update(cookies)
-            if ok and data.get("authenticated"):
-                self.user = data.get("user")
+            result = http_json("GET", "/auth/me", cookies=self.cookies)
+            if result.cookies:
+                self.cookies.update(result.cookies)
+            if result.ok and result.data.get("authenticated"):
+                self.user = result.data.get("user")
+                log.info("Organizer authenticated: %s",
+                         self.user.get("display_name") if self.user else "?")
                 self.after(0, self.show_organizer_dashboard)
                 return
-        self.after(0, lambda: self.status_lbl.configure(
-            text="Login-Timeout. Bitte erneut versuchen.", text_color=RED))
+        self.after(0, lambda: self._status_label.configure(
+            text=t("login.timeout"), text_color=RED))
 
-    # ── Veranstalter: Dashboard ───────────────────────────────────────────────
+    # ── Organizer dashboard ───────────────────────────────────────────────────
 
-    def show_organizer_dashboard(self):
+    def show_organizer_dashboard(self) -> None:
+        self._active_screen = self.show_organizer_dashboard
         self._clear()
-        u = self.user or {}
-        sub = "Eingeloggt als {}".format(u.get("display_name", "?"))
-        self._topbar(self, "Dein Event", sub, back=self._logout)
+        display_name = (self.user or {}).get("display_name", "?")
+        self._topbar(self, t("dash.title"),
+                     t("dash.logged_in_as", name=display_name),
+                     back=self._logout)
 
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=24, pady=20)
 
-        # Event-State laden
-        ok, data, cookies = http_json("GET", "/api/my-event", cookies=self.cookies)
-        if cookies:
-            self.cookies.update(cookies)
+        result = http_json("GET", "/api/my-event", cookies=self.cookies)
+        if result.cookies:
+            self.cookies.update(result.cookies)
 
-        if not ok or not data.get("authenticated"):
+        if not result.ok or not result.data.get("authenticated"):
             self._logout()
             return
 
-        if not data.get("event"):
-            # Kein Event — Wizard direkt anzeigen
+        if not result.data.get("event"):
             self._render_wizard(body)
             return
 
-        # Event existiert — Status + Buttons
-        self._render_event_status(body, data)
+        self._render_event_status(body, result.data)
 
-    def _render_event_status(self, body, data):
-        ev = data["event"]
+    def _render_event_status(self, body: ctk.CTkScrollableFrame,
+                             data: dict[str, Any]) -> None:
+        event = data["event"]
         teams = data.get("teams", [])
 
-        # Status-Card
         card = ctk.CTkFrame(body, fg_color=BG2, border_color=BDR,
                             border_width=1, corner_radius=12)
         card.pack(fill="x", pady=(0, 14))
         inner = ctk.CTkFrame(card, fg_color="transparent")
         inner.pack(fill="x", padx=18, pady=16)
 
-        ctk.CTkLabel(inner, text=ev["name"],
+        ctk.CTkLabel(inner, text=event["name"],
                      font=ctk.CTkFont(FONT_FAM, 18, "bold"),
                      text_color=WHITE).pack(anchor="w")
+        mode_key = "dash.mode.versus" if event["mode"] == "versus" else "dash.mode.coop"
         ctk.CTkLabel(inner,
-                     text="Modus: {} · Ziel: {:,}".format(
-                         "Versus" if ev["mode"] == "versus" else "Coop",
-                         ev["goal"]).replace(",", "."),
+                     text=t("dash.mode_goal",
+                            mode=t(mode_key), goal=fmt_int(event["goal"])),
                      font=ctk.CTkFont(FONT_FAM, 11),
                      text_color=GRAY).pack(anchor="w", pady=(2, 0))
 
-        # Stats
-        stat = ctk.CTkFrame(inner, fg_color="transparent")
-        stat.pack(fill="x", pady=(14, 0))
-        for lbl, val, col in [
-            ("Restdamage", ev["remaining"], ACCENT),
-            ("Dealt",      ev["total_dealt"], GREEN),
-        ]:
-            cell = ctk.CTkFrame(stat, fg_color=BG3, corner_radius=8)
+        stat_row = ctk.CTkFrame(inner, fg_color="transparent")
+        stat_row.pack(fill="x", pady=(14, 0))
+        for label_key, value, color in (
+            ("dash.stat.remaining", event["remaining"], ACCENT),
+            ("dash.stat.dealt",     event["total_dealt"], GREEN),
+        ):
+            cell = ctk.CTkFrame(stat_row, fg_color=BG3, corner_radius=8)
             cell.pack(side="left", expand=True, fill="x", padx=4)
-            ctk.CTkLabel(cell, text=lbl,
+            ctk.CTkLabel(cell, text=t(label_key).upper(),
                          font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                          text_color=GRAY).pack(pady=(10, 0))
-            ctk.CTkLabel(cell, text="{:,}".format(val).replace(",", "."),
+            ctk.CTkLabel(cell, text=fmt_int(value),
                          font=ctk.CTkFont(FONT_FAM, 20, "bold"),
-                         text_color=col).pack(pady=(2, 12))
+                         text_color=color).pack(pady=(2, 12))
 
-        # Overlay-URL
-        ovl = ctk.CTkFrame(body, fg_color=BG2, corner_radius=10)
-        ovl.pack(fill="x", pady=(0, 14))
-        ctk.CTkLabel(ovl, text="OBS BROWSER-SOURCE URL",
+        overlay = ctk.CTkFrame(body, fg_color=BG2, corner_radius=10)
+        overlay.pack(fill="x", pady=(0, 14))
+        ctk.CTkLabel(overlay, text=t("dash.obs_url"),
                      font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                      text_color=GRAY).pack(anchor="w", padx=14, pady=(12, 4))
-        url_row = ctk.CTkFrame(ovl, fg_color="transparent")
+        url_row = ctk.CTkFrame(overlay, fg_color="transparent")
         url_row.pack(fill="x", padx=14, pady=(0, 12))
         url_entry = ctk.CTkEntry(url_row, font=ctk.CTkFont(FONT_FAM, 11),
-                                 fg_color=BG, border_color=BDR, text_color=ACCENT,
-                                 height=32)
-        url_entry.insert(0, ev.get("overlay_url") or "")
+                                 fg_color=BG, border_color=BDR,
+                                 text_color=ACCENT, height=32)
+        url_entry.insert(0, event.get("overlay_url") or "")
         url_entry.configure(state="readonly")
         url_entry.pack(side="left", fill="x", expand=True)
-        ctk.CTkButton(url_row, text="Kopieren", width=90, height=32,
+        ctk.CTkButton(url_row, text=t("common.copy"), width=90, height=32,
                       font=ctk.CTkFont(FONT_FAM, 11, "bold"),
                       fg_color=ACCENT, hover_color=ACCENT2, text_color="#000",
-                      command=lambda u=ev.get("overlay_url"): self._copy(u)).pack(side="right", padx=(8, 0))
+                      command=lambda url=event.get("overlay_url"): self._copy(url)
+                      ).pack(side="right", padx=(8, 0))
 
-        # Teams + Invite-Links
-        ctk.CTkLabel(body, text="TEAMS & INVITE-LINKS",
+        ctk.CTkLabel(body, text=t("dash.teams_section"),
                      font=ctk.CTkFont(FONT_FAM, 10, "bold"),
                      text_color=GRAY).pack(anchor="w", pady=(8, 8))
 
-        for t in teams:
-            tcard = ctk.CTkFrame(body, fg_color=BG2,
-                                 border_color=BDR, border_width=1,
-                                 corner_radius=10)
-            tcard.pack(fill="x", pady=(0, 10))
-            tinner = ctk.CTkFrame(tcard, fg_color="transparent")
-            tinner.pack(fill="x", padx=14, pady=12)
+        for team in teams:
+            self._render_team_card(body, team)
 
-            head = ctk.CTkFrame(tinner, fg_color="transparent")
-            head.pack(fill="x")
-            dot = tk.Frame(head, bg=t["color"], width=10, height=10)
-            dot.pack(side="left", padx=(0, 8))
-            ctk.CTkLabel(head, text=t["name"],
-                         font=ctk.CTkFont(FONT_FAM, 14, "bold"),
-                         text_color=WHITE).pack(side="left")
-            ctk.CTkLabel(head,
-                         text="{:,} Damage · {} Mitglieder".format(t["damage"], len(t["members"])).replace(",", "."),
-                         font=ctk.CTkFont(FONT_FAM, 11),
-                         text_color=GRAY).pack(side="right")
-
-            # Invite code field
-            code_row = ctk.CTkFrame(tinner, fg_color="transparent")
-            code_row.pack(fill="x", pady=(10, 0))
-            code_entry = ctk.CTkEntry(code_row, font=ctk.CTkFont(FONT_FAM, 11),
-                                      fg_color=BG, border_color=BDR,
-                                      text_color=t["color"], height=32)
-            code_entry.insert(0, t["invite_token"])
-            code_entry.configure(state="readonly")
-            code_entry.pack(side="left", fill="x", expand=True)
-            ctk.CTkButton(code_row, text="Code", width=70, height=32,
-                          font=ctk.CTkFont(FONT_FAM, 11, "bold"),
-                          fg_color=t["color"], hover_color=t["color"],
-                          text_color="#000",
-                          command=lambda tok=t["invite_token"]: self._copy(tok)).pack(side="right", padx=(6, 0))
-
-        # Buttons
-        btn_row = ctk.CTkFrame(body, fg_color="transparent")
-        btn_row.pack(fill="x", pady=(14, 0))
-        ctk.CTkButton(btn_row, text="↻ Reset",
+        buttons = ctk.CTkFrame(body, fg_color="transparent")
+        buttons.pack(fill="x", pady=(14, 0))
+        ctk.CTkButton(buttons, text=t("dash.reset"),
                       font=ctk.CTkFont(FONT_FAM, 12, "bold"),
                       height=42, fg_color=BG3, hover_color=BDR,
                       text_color=RED, border_color=RED, border_width=1,
-                      corner_radius=8, command=self._reset_event).pack(side="left", expand=True, fill="x", padx=(0,5))
-        ctk.CTkButton(btn_row, text="🗑 Event loeschen",
+                      corner_radius=8, command=self._reset_event
+                      ).pack(side="left", expand=True, fill="x", padx=(0, 5))
+        ctk.CTkButton(buttons, text=t("dash.delete"),
                       font=ctk.CTkFont(FONT_FAM, 12, "bold"),
                       height=42, fg_color=BG3, hover_color=BDR,
                       text_color=RED, border_color=RED, border_width=1,
-                      corner_radius=8, command=self._delete_event).pack(side="left", expand=True, fill="x", padx=(5,0))
+                      corner_radius=8, command=self._delete_event
+                      ).pack(side="left", expand=True, fill="x", padx=(5, 0))
 
-        ctk.CTkButton(body, text="🔄 Aktualisieren",
+        ctk.CTkButton(body, text=t("dash.refresh"),
                       font=ctk.CTkFont(FONT_FAM, 11),
                       height=36, fg_color=BG2, hover_color=BG3,
                       text_color=GRAY, border_color=BDR, border_width=1,
                       corner_radius=6,
-                      command=self.show_organizer_dashboard).pack(fill="x", pady=(14, 0))
+                      command=self.show_organizer_dashboard
+                      ).pack(fill="x", pady=(14, 0))
 
-    # ── Event-Wizard ──────────────────────────────────────────────────────────
+    def _render_team_card(self, body: tk.Misc, team: dict[str, Any]) -> None:
+        card = ctk.CTkFrame(body, fg_color=BG2, border_color=BDR,
+                            border_width=1, corner_radius=10)
+        card.pack(fill="x", pady=(0, 10))
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="x", padx=14, pady=12)
 
-    def _render_wizard(self, body):
+        head = ctk.CTkFrame(inner, fg_color="transparent")
+        head.pack(fill="x")
+        tk.Frame(head, bg=team["color"], width=10, height=10).pack(side="left", padx=(0, 8))
+        ctk.CTkLabel(head, text=team["name"],
+                     font=ctk.CTkFont(FONT_FAM, 14, "bold"),
+                     text_color=WHITE).pack(side="left")
+        ctk.CTkLabel(head,
+                     text=t("dash.team.summary",
+                            damage=fmt_int(team["damage"]),
+                            n=len(team["members"])),
+                     font=ctk.CTkFont(FONT_FAM, 11),
+                     text_color=GRAY).pack(side="right")
+
+        code_row = ctk.CTkFrame(inner, fg_color="transparent")
+        code_row.pack(fill="x", pady=(10, 0))
+        code_entry = ctk.CTkEntry(code_row, font=ctk.CTkFont(FONT_FAM, 11),
+                                  fg_color=BG, border_color=BDR,
+                                  text_color=team["color"], height=32)
+        code_entry.insert(0, team["invite_token"])
+        code_entry.configure(state="readonly")
+        code_entry.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(code_row, text=t("dash.team.copy_code"), width=70, height=32,
+                      font=ctk.CTkFont(FONT_FAM, 11, "bold"),
+                      fg_color=team["color"], hover_color=team["color"],
+                      text_color="#000",
+                      command=lambda token=team["invite_token"]: self._copy(token)
+                      ).pack(side="right", padx=(6, 0))
+
+    # ── Event wizard ──────────────────────────────────────────────────────────
+
+    def _render_wizard(self, body: tk.Misc) -> None:
+        names = self._default_team_names()
         self._wizard_teams = [
-            {"name": "Team Gold", "color": "#ffd700"},
-            {"name": "Team Cyan", "color": "#03dac6"},
+            {"name": names[0], "color": "#ffd700"},
+            {"name": names[1], "color": "#03dac6"},
         ]
         self._wizard_mode = "coop"
 
-        ctk.CTkLabel(body, text="Noch kein Event — leg eines an:",
+        ctk.CTkLabel(body, text=t("wizard.heading"),
                      font=ctk.CTkFont(FONT_FAM, 13, "bold"),
                      text_color=WHITE).pack(anchor="w", pady=(0, 14))
 
-        # Name
-        ctk.CTkLabel(body, text="EVENT-NAME",
+        ctk.CTkLabel(body, text=t("wizard.name"),
                      font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                      text_color=GRAY).pack(anchor="w")
         self.w_name = ctk.CTkEntry(body, font=ctk.CTkFont(FONT_FAM, 13),
-                                   placeholder_text="z.B. Mohjos Sommer-Cup",
+                                   placeholder_text=t("wizard.name_hint"),
                                    fg_color=BG2, border_color=BDR,
-                                   text_color=WHITE, height=40,
-                                   corner_radius=8)
+                                   text_color=WHITE, height=40, corner_radius=8)
         self.w_name.pack(fill="x", pady=(4, 14))
 
-        # Goal
-        ctk.CTkLabel(body, text="SCHADEN-ZIEL",
+        ctk.CTkLabel(body, text=t("wizard.goal"),
                      font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                      text_color=GRAY).pack(anchor="w")
         self.w_goal = ctk.CTkEntry(body, font=ctk.CTkFont(FONT_FAM, 13),
                                    placeholder_text="100000",
                                    fg_color=BG2, border_color=BDR,
-                                   text_color=WHITE, height=40,
-                                   corner_radius=8)
+                                   text_color=WHITE, height=40, corner_radius=8)
         self.w_goal.insert(0, "100000")
         self.w_goal.pack(fill="x", pady=(4, 14))
 
-        # Mode
-        ctk.CTkLabel(body, text="MODUS",
+        ctk.CTkLabel(body, text=t("wizard.mode"),
                      font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                      text_color=GRAY).pack(anchor="w")
         mode_row = ctk.CTkFrame(body, fg_color="transparent")
         mode_row.pack(fill="x", pady=(4, 14))
-        self._mode_btns = {}
-        for m, lbl in [("coop", "Kooperativ"), ("versus", "Versus")]:
-            b = ctk.CTkButton(mode_row, text=lbl,
-                              font=ctk.CTkFont(FONT_FAM, 12, "bold"),
-                              height=44, corner_radius=8,
-                              fg_color=BG2 if m != self._wizard_mode else ACCENT,
-                              hover_color=BG3, text_color=WHITE if m != self._wizard_mode else "#000",
-                              border_color=BDR, border_width=1,
-                              command=lambda mm=m: self._set_mode(mm))
-            b.pack(side="left", expand=True, fill="x", padx=4)
-            self._mode_btns[m] = b
+        self._mode_buttons = {}
+        for code, key in (("coop", "wizard.mode_coop"),
+                          ("versus", "wizard.mode_versus")):
+            button = ctk.CTkButton(
+                mode_row, text=t(key),
+                font=ctk.CTkFont(FONT_FAM, 12, "bold"),
+                height=44, corner_radius=8,
+                fg_color=BG2 if code != self._wizard_mode else ACCENT,
+                hover_color=BG3,
+                text_color=WHITE if code != self._wizard_mode else "#000",
+                border_color=BDR, border_width=1,
+                command=lambda c=code: self._set_mode(c),
+            )
+            button.pack(side="left", expand=True, fill="x", padx=4)
+            self._mode_buttons[code] = button
 
-        # Teams
-        ctk.CTkLabel(body, text="TEAMS (2-4)",
+        ctk.CTkLabel(body, text=t("wizard.teams"),
                      font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                      text_color=GRAY).pack(anchor="w")
         self._teams_frame = ctk.CTkFrame(body, fg_color="transparent")
         self._teams_frame.pack(fill="x", pady=(4, 8))
         self._render_team_rows()
 
-        self.w_add_team = ctk.CTkButton(body, text="+ Team hinzufuegen",
+        self.w_add_team = ctk.CTkButton(body, text=t("wizard.add_team"),
                                         font=ctk.CTkFont(FONT_FAM, 11),
                                         height=34, fg_color=BG2, hover_color=BG3,
                                         text_color=GRAY,
@@ -590,7 +869,7 @@ class App(ctk.CTk):
                                         command=self._add_team)
         self.w_add_team.pack(fill="x", pady=(0, 18))
 
-        ctk.CTkButton(body, text="Event erstellen",
+        ctk.CTkButton(body, text=t("wizard.submit"),
                       font=ctk.CTkFont(FONT_FAM, 14, "bold"),
                       height=48, fg_color=ACCENT, hover_color=ACCENT2,
                       text_color="#000", corner_radius=8,
@@ -598,243 +877,265 @@ class App(ctk.CTk):
 
         self.w_status = ctk.CTkLabel(body, text="",
                                      font=ctk.CTkFont(FONT_FAM, 11),
-                                     text_color=GRAY, wraplength=420, justify="left")
+                                     text_color=GRAY,
+                                     wraplength=420, justify="left")
         self.w_status.pack(anchor="w", pady=(10, 0))
 
-    def _render_team_rows(self):
+    def _default_team_names(self) -> list[str]:
+        if _current_lang == "en":
+            return ["Team Gold", "Team Cyan", "Team Red", "Team Violet"]
+        return ["Team Gold", "Team Cyan", "Team Rot", "Team Violett"]
+
+    def _render_team_rows(self) -> None:
         for child in self._teams_frame.winfo_children():
             child.destroy()
-        DEFAULTS = [("Team Gold","#ffd700"),("Team Cyan","#03dac6"),
-                    ("Team Rot","#ff6b6b"),("Team Violett","#a78bfa")]
-        for i, t in enumerate(self._wizard_teams):
+        for index, team in enumerate(self._wizard_teams):
             row = ctk.CTkFrame(self._teams_frame, fg_color="transparent")
             row.pack(fill="x", pady=2)
-            swatch = tk.Frame(row, bg=t["color"], width=28, height=28)
-            swatch.pack(side="left", padx=(0,8))
-            swatch.bind("<Button-1>", lambda e, idx=i: self._cycle_color(idx))
-            e = ctk.CTkEntry(row, font=ctk.CTkFont(FONT_FAM, 12),
-                             fg_color=BG2, border_color=BDR,
-                             text_color=WHITE, height=34, corner_radius=6)
-            e.insert(0, t["name"])
-            e.bind("<KeyRelease>", lambda ev, idx=i, en=e: self._update_team_name(idx, en.get()))
-            e.pack(side="left", fill="x", expand=True)
+            swatch = tk.Frame(row, bg=team["color"], width=28, height=28)
+            swatch.pack(side="left", padx=(0, 8))
+            swatch.bind("<Button-1>", lambda _e, i=index: self._cycle_color(i))
+            entry = ctk.CTkEntry(row, font=ctk.CTkFont(FONT_FAM, 12),
+                                 fg_color=BG2, border_color=BDR,
+                                 text_color=WHITE, height=34, corner_radius=6)
+            entry.insert(0, team["name"])
+            entry.bind(
+                "<KeyRelease>",
+                lambda _e, i=index, widget=entry: self._update_team_name(i, widget.get()),
+            )
+            entry.pack(side="left", fill="x", expand=True)
             if len(self._wizard_teams) > 2:
                 ctk.CTkButton(row, text="✕", width=34, height=34,
                               font=ctk.CTkFont(FONT_FAM, 12, "bold"),
                               fg_color=BG2, hover_color=BG3, text_color=RED,
                               border_color=BDR, border_width=1,
                               corner_radius=6,
-                              command=lambda idx=i: self._remove_team(idx)).pack(side="left", padx=(6,0))
+                              command=lambda i=index: self._remove_team(i)
+                              ).pack(side="left", padx=(6, 0))
 
-    def _set_mode(self, m):
-        self._wizard_mode = m
-        for k, b in self._mode_btns.items():
-            b.configure(fg_color=ACCENT if k == m else BG2,
-                        text_color="#000" if k == m else WHITE)
+    def _set_mode(self, mode: str) -> None:
+        self._wizard_mode = mode
+        for code, button in self._mode_buttons.items():
+            button.configure(
+                fg_color=ACCENT if code == mode else BG2,
+                text_color="#000" if code == mode else WHITE,
+            )
 
-    def _cycle_color(self, i):
-        colors = ["#ffd700","#03dac6","#ff6b6b","#a78bfa"]
-        idx = colors.index(self._wizard_teams[i]["color"]) if self._wizard_teams[i]["color"] in colors else 0
-        self._wizard_teams[i]["color"] = colors[(idx+1) % len(colors)]
+    def _cycle_color(self, index: int) -> None:
+        palette = ["#ffd700", "#03dac6", "#ff6b6b", "#a78bfa"]
+        current = self._wizard_teams[index]["color"]
+        idx = palette.index(current) if current in palette else 0
+        self._wizard_teams[index]["color"] = palette[(idx + 1) % len(palette)]
         self._render_team_rows()
 
-    def _update_team_name(self, i, name):
-        self._wizard_teams[i]["name"] = name
+    def _update_team_name(self, index: int, name: str) -> None:
+        self._wizard_teams[index]["name"] = name
 
-    def _add_team(self):
-        if len(self._wizard_teams) >= 4: return
-        DEF = [("Team Gold","#ffd700"),("Team Cyan","#03dac6"),
-               ("Team Rot","#ff6b6b"),("Team Violett","#a78bfa")]
-        n, c = DEF[len(self._wizard_teams)]
-        self._wizard_teams.append({"name": n, "color": c})
+    def _add_team(self) -> None:
+        if len(self._wizard_teams) >= 4:
+            return
+        defaults = (("#ffd700"), ("#03dac6"), ("#ff6b6b"), ("#a78bfa"))
+        names = self._default_team_names()
+        self._wizard_teams.append({
+            "name":  names[len(self._wizard_teams)],
+            "color": defaults[len(self._wizard_teams)],
+        })
         self._render_team_rows()
 
-    def _remove_team(self, i):
-        if len(self._wizard_teams) <= 2: return
-        self._wizard_teams.pop(i)
+    def _remove_team(self, index: int) -> None:
+        if len(self._wizard_teams) <= 2:
+            return
+        self._wizard_teams.pop(index)
         self._render_team_rows()
 
-    def _submit_event(self):
-        name = self.w_name.get().strip() or "Mohjos DamageRace"
+    def _submit_event(self) -> None:
+        name = self.w_name.get().strip() or t("app.title")
         try:
             goal = int(self.w_goal.get().strip() or "100000")
         except ValueError:
             goal = 100000
-        payload = {"name": name, "goal": goal, "mode": self._wizard_mode,
-                   "teams": self._wizard_teams}
-        self.w_status.configure(text="Event wird erstellt…", text_color=GRAY)
-        def _go():
-            ok, data, cookies = http_json("POST", "/api/event", payload, self.cookies)
-            if cookies: self.cookies.update(cookies)
-            if ok and data.get("ok"):
+        payload = {
+            "name":  name,
+            "goal":  goal,
+            "mode":  self._wizard_mode,
+            "teams": self._wizard_teams,
+        }
+        self.w_status.configure(text=t("wizard.creating"), text_color=GRAY)
+
+        def run() -> None:
+            result = http_json("POST", "/api/event", payload, self.cookies)
+            if result.cookies:
+                self.cookies.update(result.cookies)
+            if result.ok and result.data.get("ok"):
                 self.after(0, self.show_organizer_dashboard)
             else:
-                err = data.get("error", "Fehler")
+                detail = result.data.get("error", t("common.error"))
                 self.after(0, lambda: self.w_status.configure(
-                    text="Fehler: " + err, text_color=RED))
-        threading.Thread(target=_go, daemon=True).start()
+                    text=t("wizard.error", detail=detail), text_color=RED))
 
-    def _reset_event(self):
-        ok, data, cookies = http_json("POST", "/api/event/set",
-                                       {"reset": True}, self.cookies)
-        if cookies: self.cookies.update(cookies)
+        threading.Thread(target=run, daemon=True).start()
+
+    def _reset_event(self) -> None:
+        result = http_json("POST", "/api/event/set", {"reset": True}, self.cookies)
+        if result.cookies:
+            self.cookies.update(result.cookies)
         self.show_organizer_dashboard()
 
-    def _delete_event(self):
-        ok, data, cookies = http_json("POST", "/api/event/delete",
-                                       {}, self.cookies)
-        if cookies: self.cookies.update(cookies)
+    def _delete_event(self) -> None:
+        result = http_json("POST", "/api/event/delete", {}, self.cookies)
+        if result.cookies:
+            self.cookies.update(result.cookies)
         self.show_organizer_dashboard()
 
-    def _logout(self):
+    def _logout(self) -> None:
         try:
             http_json("POST", "/auth/logout", {}, self.cookies)
         except Exception:
-            pass
+            log.debug("Logout request failed (ignored)", exc_info=True)
         self.cookies = {}
         self.user = None
         self.show_welcome()
 
-    def _copy(self, text):
-        if not text: return
-        self.clipboard_clear()
-        self.clipboard_append(text)
-        self.update()
+    # ── Participant ───────────────────────────────────────────────────────────
 
-    # ── Teilnehmer ────────────────────────────────────────────────────────────
-
-    def show_participant(self):
+    def show_participant(self) -> None:
+        self._active_screen = self.show_participant
         self._clear()
-        self._topbar(self, "An Event teilnehmen",
-                     "Gib den Invite-Code von deinem Veranstalter ein",
+        self._topbar(self, t("join.title"), t("join.subtitle"),
                      back=self.show_welcome)
 
         body = ctk.CTkScrollableFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=24, pady=20)
 
-        # Invite-Code
-        ctk.CTkLabel(body, text="INVITE-CODE",
+        ctk.CTkLabel(body, text=t("join.code_label"),
                      font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                      text_color=GRAY).pack(anchor="w")
-        ctk.CTkLabel(body, text="Vom Veranstalter erhalten (z.B. tm_AbCd1234)",
+        ctk.CTkLabel(body, text=t("join.code_hint"),
                      font=ctk.CTkFont(FONT_FAM, 10),
                      text_color=DIM).pack(anchor="w", pady=(2, 6))
         self.p_code = ctk.CTkEntry(body, font=ctk.CTkFont(FONT_FAM, 14),
                                    placeholder_text="tm_…",
                                    fg_color=BG2, border_color=BDR,
-                                   text_color=WHITE, height=44,
-                                   corner_radius=8)
+                                   text_color=WHITE, height=44, corner_radius=8)
         self.p_code.pack(fill="x", pady=(0, 18))
 
-        # WoT-Name
-        ctk.CTkLabel(body, text="DEIN WORLD-OF-TANKS NAME",
+        ctk.CTkLabel(body, text=t("join.wot_label"),
                      font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                      text_color=GRAY).pack(anchor="w")
-        ctk.CTkLabel(body, text="Exakt wie im Spiel — Gross-/Kleinschreibung beachten",
+        ctk.CTkLabel(body, text=t("join.wot_hint"),
                      font=ctk.CTkFont(FONT_FAM, 10),
                      text_color=DIM).pack(anchor="w", pady=(2, 6))
         self.p_name = ctk.CTkEntry(body, font=ctk.CTkFont(FONT_FAM, 14),
-                                   placeholder_text="z.B. Mohjo_beist",
+                                   placeholder_text=t("join.wot_placeholder"),
                                    fg_color=BG2, border_color=BDR,
-                                   text_color=WHITE, height=44,
-                                   corner_radius=8)
+                                   text_color=WHITE, height=44, corner_radius=8)
         self.p_name.pack(fill="x", pady=(0, 22))
 
-        # WoT-Pfad
         self._wot_path = find_wot()
-        wot_ok = os.path.isfile(os.path.join(self._wot_path, "WorldOfTanks.exe")) if self._wot_path else False
-        version = find_version(self._wot_path) if wot_ok else None
+        version = find_version(self._wot_path) if self._wot_path else None
+        wot_exists = bool(self._wot_path and
+                          os.path.isfile(os.path.join(self._wot_path, "WorldOfTanks.exe")))
 
-        if wot_ok and version:
-            icon, color, txt = "✓", GREEN, f"World of Tanks · Version {version}"
-        elif wot_ok:
-            icon, color, txt = "!", "#ff9800", "WoT gefunden, res_mods/ fehlt — bitte WoT einmal starten"
+        if wot_exists and version:
+            label_color, label_text = GREEN, t("join.detect.found", version=version)
+        elif wot_exists:
+            label_color, label_text = WARN, t("join.detect.no_res_mods")
         else:
-            icon, color, txt = "✕", RED, "World of Tanks nicht gefunden"
+            label_color, label_text = RED, t("join.detect.missing")
 
         row = ctk.CTkFrame(body, fg_color="transparent")
         row.pack(fill="x", pady=(0, 18))
-        self.p_path_lbl = ctk.CTkLabel(row, text=f"{icon}  {txt}",
-                                       font=ctk.CTkFont(FONT_FAM, 11),
-                                       text_color=color)
-        self.p_path_lbl.pack(side="left")
-        ctk.CTkButton(row, text="Anderer Ordner", width=130, height=30,
+        self.p_path_label = ctk.CTkLabel(
+            row, text=label_text,
+            font=ctk.CTkFont(FONT_FAM, 11),
+            text_color=label_color,
+        )
+        self.p_path_label.pack(side="left")
+        ctk.CTkButton(row, text=t("join.pick_folder"), width=160, height=30,
                       font=ctk.CTkFont(FONT_FAM, 11),
                       fg_color=BG2, hover_color=BG3,
                       text_color=GRAY, border_color=BDR, border_width=1,
-                      corner_radius=6,
-                      command=self._browse_wot).pack(side="right")
+                      corner_radius=6, command=self._browse_wot
+                      ).pack(side="right")
 
-        # Install-Button
-        self.p_install = ctk.CTkButton(body,
-                                       text="Beitreten und Mod installieren",
-                                       font=ctk.CTkFont(FONT_FAM, 14, "bold"),
-                                       height=50, fg_color=ACCENT, hover_color=ACCENT2,
-                                       text_color="#000", corner_radius=8,
-                                       command=self._do_install)
+        self.p_install = ctk.CTkButton(
+            body, text=t("join.install_btn"),
+            font=ctk.CTkFont(FONT_FAM, 14, "bold"),
+            height=50, fg_color=ACCENT, hover_color=ACCENT2,
+            text_color="#000", corner_radius=8, command=self._do_install,
+        )
         self.p_install.pack(fill="x")
 
-        self.p_status = ctk.CTkLabel(body, text="",
-                                     font=ctk.CTkFont(FONT_FAM, 12),
-                                     text_color=GRAY, wraplength=420, justify="left")
+        self.p_status = ctk.CTkLabel(
+            body, text="",
+            font=ctk.CTkFont(FONT_FAM, 12),
+            text_color=GRAY, wraplength=420, justify="left",
+        )
         self.p_status.pack(anchor="w", pady=(16, 0))
 
-    def _browse_wot(self):
-        p = filedialog.askdirectory(title="World of Tanks Ordner waehlen")
-        if not p: return
-        self._wot_path = p
-        ok = os.path.isfile(os.path.join(p, "WorldOfTanks.exe"))
-        v = find_version(p) if ok else None
-        if ok and v:
-            self.p_path_lbl.configure(text=f"✓  World of Tanks · Version {v}", text_color=GREEN)
-        elif ok:
-            self.p_path_lbl.configure(text="!  res_mods/ fehlt — WoT einmal starten", text_color="#ff9800")
+    def _browse_wot(self) -> None:
+        path = filedialog.askdirectory(title="World of Tanks")
+        if not path:
+            return
+        self._wot_path = path
+        exists = os.path.isfile(os.path.join(path, "WorldOfTanks.exe"))
+        version = find_version(path) if exists else None
+        if exists and version:
+            self.p_path_label.configure(
+                text=t("join.detect.found", version=version), text_color=GREEN,
+            )
+        elif exists:
+            self.p_path_label.configure(text=t("join.detect.no_res_mods"), text_color=WARN)
         else:
-            self.p_path_lbl.configure(text="✕  WorldOfTanks.exe nicht gefunden", text_color=RED)
+            self.p_path_label.configure(text=t("join.detect.missing"), text_color=RED)
 
-    def _do_install(self):
+    def _do_install(self) -> None:
         code = self.p_code.get().strip()
         name = self.p_name.get().strip()
         if not code or not name:
-            self.p_status.configure(text="Bitte Invite-Code UND WoT-Name eingeben.",
-                                    text_color="#ff9800")
+            self.p_status.configure(text=t("join.need_fields"), text_color=WARN)
             return
-        if not self._wot_path or not os.path.isfile(os.path.join(self._wot_path, "WorldOfTanks.exe")):
-            self.p_status.configure(text="WoT-Ordner fehlt.", text_color=RED)
+        if not self._wot_path or not os.path.isfile(
+                os.path.join(self._wot_path, "WorldOfTanks.exe")):
+            self.p_status.configure(text=t("join.wot_missing"), text_color=RED)
             return
-        self.p_install.configure(state="disabled", text="Verbinde mit Server…")
+
+        self.p_install.configure(state="disabled", text=t("join.connecting"))
         self.p_status.configure(text="", text_color=GRAY)
 
-        def _run():
-            ok, data, _ = http_json("POST", "/api/join",
-                                    {"token": code, "wot_name": name})
-            if not ok or not data.get("ok"):
-                err = data.get("error", "Beitritt fehlgeschlagen")
-                self.after(0, lambda: self._after_install(False, err))
+        def run() -> None:
+            result = http_json("POST", "/api/join",
+                               {"token": code, "wot_name": name})
+            if not result.ok or not result.data.get("ok"):
+                detail = result.data.get("error", t("join.failed"))
+                self.after(0, lambda: self._after_install(False, detail))
                 return
-            token = data["streamer_token"]
-            event = data.get("event", {})
-            team  = data.get("team")
-            self.after(0, lambda: self.p_install.configure(text="Installiere Mod…"))
-            inst_ok, msg = install_mod(self._wot_path, name, token)
-            if inst_ok:
-                team_str = f" · Team: {team['name']}" if team else ""
-                self.after(0, lambda: self._after_install(
-                    True, f"Beigetreten zu \"{event.get('name','?')}\"{team_str}\n"
-                          f"Mod installiert (WoT {msg})\n\nStart WoT neu — fertig!"))
+
+            token = result.data["streamer_token"]
+            event = result.data.get("event", {})
+            team = result.data.get("team")
+            self.after(0, lambda: self.p_install.configure(text=t("join.installing")))
+            ok, version_or_err = install_mod(self._wot_path, name, token)
+            if ok:
+                team_text = t("join.success_team", name=team["name"]) if team else ""
+                message = t("join.success",
+                            event=event.get("name", "?"),
+                            team=team_text,
+                            version=version_or_err)
+                self.after(0, lambda: self._after_install(True, message))
             else:
-                self.after(0, lambda: self._after_install(False, msg))
+                self.after(0, lambda: self._after_install(False, version_or_err))
 
-        threading.Thread(target=_run, daemon=True).start()
+        threading.Thread(target=run, daemon=True).start()
 
-    def _after_install(self, ok, msg):
-        self.p_install.configure(state="normal",
-                                 text="Erledigt ✓" if ok else "Beitreten und Mod installieren")
+    def _after_install(self, ok: bool, message: str) -> None:
         if ok:
-            self.p_install.configure(fg_color=BG2, text_color=GREEN, state="disabled")
-            self.p_status.configure(text="✓  " + msg, text_color=GREEN)
+            self.p_install.configure(text=t("join.done"), state="disabled",
+                                     fg_color=BG2, text_color=GREEN)
+            self.p_status.configure(text="✓  " + message, text_color=GREEN)
         else:
-            self.p_status.configure(text="✕  " + msg, text_color=RED)
+            self.p_install.configure(state="normal", text=t("join.install_btn"))
+            self.p_status.configure(text="✕  " + message, text_color=RED)
 
 
 if __name__ == "__main__":
