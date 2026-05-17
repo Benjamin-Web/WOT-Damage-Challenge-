@@ -11,6 +11,7 @@ und eine kleine JS-Seite postet den Token ans Backend.
 import os
 import urllib.parse
 import urllib.request
+import urllib.error
 import json
 
 CLIENT_ID     = os.environ.get('TWITCH_CLIENT_ID',
@@ -40,6 +41,22 @@ def build_auth_url(redirect_uri, state, response_type=None):
     return '{}?{}'.format(AUTH_URL, q)
 
 
+UA = 'MohjosDamageRace/1.0 (+https://mohjos-damagerace.duckdns.org)'
+
+
+def _open(req):
+    """urlopen-Wrapper der Fehlertexte mit ausliest (sonst kommt nur HTTP 4xx)."""
+    try:
+        return urllib.request.urlopen(req, timeout=15)
+    except urllib.error.HTTPError as e:
+        body = ''
+        try:
+            body = e.read().decode('utf-8', 'replace')
+        except Exception:
+            pass
+        raise RuntimeError('Twitch {} {}: {}'.format(e.code, e.reason, body[:300]))
+
+
 def exchange_code(code, redirect_uri):
     """Authorization Code Flow: tauscht code gegen access_token."""
     data = urllib.parse.urlencode({
@@ -50,7 +67,10 @@ def exchange_code(code, redirect_uri):
         'redirect_uri':  redirect_uri,
     }).encode()
     req = urllib.request.Request(TOKEN_URL, data=data, method='POST')
-    with urllib.request.urlopen(req, timeout=10) as r:
+    req.add_header('User-Agent', UA)
+    req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+    req.add_header('Accept', 'application/json')
+    with _open(req) as r:
         return json.loads(r.read().decode())
 
 
@@ -59,7 +79,8 @@ def fetch_user(access_token):
     req = urllib.request.Request(USERS_URL)
     req.add_header('Authorization', 'Bearer ' + access_token)
     req.add_header('Client-Id', CLIENT_ID)
-    with urllib.request.urlopen(req, timeout=10) as r:
+    req.add_header('User-Agent', UA)
+    with _open(req) as r:
         body = json.loads(r.read().decode())
     data = body.get('data') or []
     if not data:
