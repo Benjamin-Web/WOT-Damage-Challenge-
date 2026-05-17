@@ -576,28 +576,38 @@ class App(ctk.CTk):
     def _mode_card(self, parent: tk.Misc, title_text: str, desc: str,
                    badge: str, color: str, command: Any) -> ctk.CTkFrame:
         outer = ctk.CTkFrame(parent, fg_color=BG2, border_color=BDR,
-                             border_width=1, corner_radius=12)
-        inner = ctk.CTkButton(outer, text="", fg_color="transparent",
-                              hover_color=BG3, corner_radius=12,
-                              command=command, anchor="w")
-        inner.pack(fill="both", expand=True)
+                             border_width=1, corner_radius=12, height=140)
+        outer.pack_propagate(False)
 
-        content = ctk.CTkFrame(inner, fg_color="transparent")
-        content.place(relx=0, rely=0, relwidth=1, relheight=1)
-
-        ctk.CTkLabel(content, text=badge,
+        ctk.CTkLabel(outer, text=badge,
                      font=ctk.CTkFont(FONT_FAM, 9, "bold"),
                      text_color=color, fg_color=BG3, corner_radius=99,
                      padx=10, pady=2).pack(anchor="w", padx=20, pady=(16, 6))
-        ctk.CTkLabel(content, text=title_text,
+        ctk.CTkLabel(outer, text=title_text,
                      font=ctk.CTkFont(FONT_FAM, 17, "bold"),
                      text_color=WHITE).pack(anchor="w", padx=20)
-        ctk.CTkLabel(content, text=desc,
+        ctk.CTkLabel(outer, text=desc,
                      font=ctk.CTkFont(FONT_FAM, 12),
                      text_color=GRAY, justify="left"
-                     ).pack(anchor="w", padx=20, pady=(4, 18))
-        outer.configure(height=130)
-        outer.pack_propagate(False)
+                     ).pack(anchor="w", padx=20, pady=(4, 14))
+
+        def hover_in(_event: tk.Event) -> None:
+            outer.configure(fg_color=BG3, border_color=color)
+
+        def hover_out(_event: tk.Event) -> None:
+            outer.configure(fg_color=BG2, border_color=BDR)
+
+        def trigger(_event: tk.Event) -> None:
+            command()
+
+        for widget in (outer, *outer.winfo_children()):
+            widget.bind("<Button-1>", trigger)
+            widget.bind("<Enter>", hover_in)
+            widget.bind("<Leave>", hover_out)
+            try:
+                widget.configure(cursor="hand2")
+            except Exception:
+                pass
         return outer
 
     # ── Organizer login ───────────────────────────────────────────────────────
@@ -630,11 +640,22 @@ class App(ctk.CTk):
 
     def _start_twitch_login(self) -> None:
         self._status_label.configure(text=t("login.browser_hint"), text_color=GRAY)
-        # Allocate a server-side session so the callback can attach the user.
+        # Allocate a server-side session and capture its sid so the browser
+        # OAuth flow can attach the user to the very same session the client
+        # is polling on.
         result = http_json("GET", "/auth/me")
         if result.cookies:
             self.cookies.update(result.cookies)
-        webbrowser.open(SERVER_URL + "/auth/twitch/start")
+        sid = result.data.get("sid") if result.ok else None
+        sid = sid or self.cookies.get("damagerace_sid", "")
+        if not sid:
+            self._status_label.configure(
+                text=t("login.timeout"), text_color=RED,
+            )
+            return
+        webbrowser.open(
+            SERVER_URL + "/auth/twitch/start?sid=" + urllib.parse.quote(sid),
+        )
         threading.Thread(target=self._poll_login, daemon=True).start()
 
     def _poll_login(self) -> None:

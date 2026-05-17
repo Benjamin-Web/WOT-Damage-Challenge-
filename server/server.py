@@ -126,7 +126,13 @@ def _route_safe(handler: Callable):
 
 @app.route("/auth/twitch/start")
 def auth_start():
-    sid, resp = _ensure_session()
+    # The desktop client passes its own session id via ?sid= so the user
+    # ends up attached to that session, which the client polls afterwards.
+    explicit_sid = request.args.get("sid")
+    if explicit_sid and db.get_session(explicit_sid):
+        sid, resp = explicit_sid, None
+    else:
+        sid, resp = _ensure_session()
     redirect_uri = _base_url() + "/auth/twitch/callback"
     state = db.create_oauth_state(sid)
     auth_url = twitch_oauth.build_auth_url(redirect_uri, state)
