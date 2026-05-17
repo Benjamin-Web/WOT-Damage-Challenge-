@@ -283,23 +283,27 @@ def _install_player_avatar_hooks():
             if not _is_allowed_arena():
                 return
             try:
-                # Older signatures pass (shooterID, targetID, ...). Newer
-                # builds pass a packed results array. We capture both.
+                _file_log('TRACE',
+                          'showShotResults args=%d types=%s preview=%s'
+                          % (len(args),
+                             [type(a).__name__ for a in args[:4]],
+                             repr(args[:2])[:200]))
                 if len(args) >= 2 and isinstance(args[0], _INT_TYPES):
-                    shooter_id = args[0]
-                    target_id = args[1]
+                    shooter_id, target_id = args[0], args[1]
                     player = _player()
                     if player is None or shooter_id != player.playerVehicleID:
                         return
                     _last_shot_target_id[0] = target_id
+                    _file_log('INFO', 'Shot landed on target=%s' % target_id)
                 elif len(args) >= 1 and hasattr(args[0], '__iter__'):
-                    # Packed results: first element typically encodes target id
                     try:
                         first = args[0][0]
                         target_id = int(first) >> 16
                         _last_shot_target_id[0] = target_id
-                    except Exception:
-                        pass
+                        _file_log('INFO', 'Shot (packed) on target=%s raw=%s'
+                                  % (target_id, first))
+                    except Exception as exc:
+                        _file_log('WARN', 'packed result parse failed: %s' % exc)
             except Exception as exc:
                 _log_warning('showShotResults hook error: %s' % exc)
 
@@ -350,6 +354,9 @@ def _install_vehicle_hooks():
             previous = _vehicle_hp_cache.get(self.id)
             orig(self, new_health, *args, **kwargs)
             try:
+                _file_log('TRACE',
+                          'onHealthChanged vehicle=%s prev=%s new=%s lastTarget=%s'
+                          % (self.id, previous, new_health, _last_shot_target_id[0]))
                 _vehicle_hp_cache[self.id] = new_health
                 if not _in_battle[0] or not _cfg.get('enabled', True):
                     return
