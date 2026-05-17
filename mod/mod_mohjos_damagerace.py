@@ -10,6 +10,8 @@
 
 import json
 import os
+import sys
+import tempfile
 import uuid
 
 try:
@@ -22,26 +24,56 @@ except Exception:  # pragma: no cover - only meaningful inside WoT
 
 _MOD_NAME = 'DamageRace'
 
+# We also mirror every log line to a side-channel file so the mod can be
+# debugged even when BigWorld.logInfo is silently failing.
+_DEBUG_LOG = os.path.join(tempfile.gettempdir(), 'damagerace_debug.log')
+
+
+def _file_log(level, message):
+    try:
+        with open(_DEBUG_LOG, 'a', encoding='utf-8') as fh:
+            fh.write('[%s] %s\n' % (level, message))
+    except Exception:
+        pass
+
 
 def _log_info(message):
+    _file_log('INFO', message)
     try:
         BigWorld.logInfo(_MOD_NAME, message, None)
     except Exception:
-        pass
+        try:
+            print('[%s] %s' % (_MOD_NAME, message))
+        except Exception:
+            pass
 
 
 def _log_warning(message):
+    _file_log('WARN', message)
     try:
         BigWorld.logWarning(_MOD_NAME, message, None)
     except Exception:
-        pass
+        try:
+            print('[%s] WARN: %s' % (_MOD_NAME, message))
+        except Exception:
+            pass
 
 
 def _log_error(message):
+    _file_log('ERROR', message)
     try:
         BigWorld.logError(_MOD_NAME, message, None)
     except Exception:
-        pass
+        try:
+            print('[%s] ERROR: %s' % (_MOD_NAME, message))
+        except Exception:
+            pass
+
+
+_file_log('INFO', 'Module file loaded. Python=%s BigWorld=%s Avatar=%s'
+          % (sys.version.split()[0],
+             'yes' if BigWorld is not None else 'no',
+             'yes' if Avatar is not None else 'no'))
 
 
 # ---------------------------------------------------------------------------
