@@ -216,7 +216,9 @@ def _do_send():
         return
 
     def _on_response(data):
-        if data is None:
+        _file_log('TRACE', 'fetchURL response type=%s preview=%r'
+                  % (type(data).__name__, str(data)[:200]))
+        if data is None or data == '':
             _log_warning('HTTP POST failed; retrying %d damage in 5s.' % damage)
             _pending_damage[0] += damage
             try:
