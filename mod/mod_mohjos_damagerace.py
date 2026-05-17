@@ -20,10 +20,46 @@ import BigWorld
 
 _MOD_NAME = 'DamageRace'
 
-_CONFIG_PATH = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    '..', '..', 'mods', 'damagerace', 'config.json',
-))
+
+def _resolve_config_path():
+    """Walk up from this file (which lives inside a .wotmod ZIP) until we
+    hit a directory that contains WorldOfTanks.exe -- the game root -- then
+    look for the config in res_mods/<version>/mods/damagerace/config.json.
+
+    We pick the newest res_mods version folder so the install matches what
+    the desktop client just wrote.
+    """
+    try:
+        cursor = os.path.dirname(os.path.abspath(__file__))
+    except Exception:
+        return None
+    for _ in range(10):
+        if os.path.isfile(os.path.join(cursor, 'WorldOfTanks.exe')):
+            res_mods = os.path.join(cursor, 'res_mods')
+            if os.path.isdir(res_mods):
+                try:
+                    versions = sorted(
+                        [d for d in os.listdir(res_mods)
+                         if os.path.isdir(os.path.join(res_mods, d))
+                         and d[:1].isdigit()],
+                        reverse=True,
+                    )
+                except OSError:
+                    versions = []
+                for version in versions:
+                    candidate = os.path.join(res_mods, version,
+                                             'mods', 'damagerace', 'config.json')
+                    if os.path.isfile(candidate):
+                        return candidate
+            return None
+        parent = os.path.dirname(cursor)
+        if parent == cursor:
+            return None
+        cursor = parent
+    return None
+
+
+_CONFIG_PATH = _resolve_config_path()
 
 _DEFAULT_CONFIG = {
     'server_url':          'https://mohjos-damagerace.duckdns.org',
@@ -37,6 +73,15 @@ _DEFAULT_CONFIG = {
 
 
 def _load_config():
+    if not _CONFIG_PATH:
+        BigWorld.logWarning(
+            _MOD_NAME,
+            'Could not locate config.json (no res_mods/<version>/mods/'
+            'damagerace/config.json under any parent directory); using '
+            'defaults.',
+            None,
+        )
+        return dict(_DEFAULT_CONFIG)
     try:
         with open(_CONFIG_PATH, 'r') as fh:
             loaded = json.load(fh)
@@ -47,7 +92,7 @@ def _load_config():
     except Exception as exc:
         BigWorld.logWarning(
             _MOD_NAME,
-            'Config not found (%s); using defaults. Path: %s'
+            'Failed to read config (%s); using defaults. Path: %s'
             % (exc, _CONFIG_PATH),
             None,
         )

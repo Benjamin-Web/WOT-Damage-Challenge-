@@ -402,9 +402,22 @@ def install_mod(wot_path: str, wot_name: str, streamer_token: str
     if not version:
         return False, t("mod.error.no_resmods")
     try:
-        mods_dir = os.path.join(wot_path, "mods")
+        # WoT only reliably loads .wotmod files placed in the version-specific
+        # mods folder (mods/<version>/). The legacy top-level path works on
+        # some clients but not on official WG/EU/NA installs.
+        mods_dir = os.path.join(wot_path, "mods", version)
         os.makedirs(mods_dir, exist_ok=True)
         shutil.copy2(WOTMOD_SRC, os.path.join(mods_dir, "mohjos_damagerace.wotmod"))
+
+        # Clean up any stray copy in the top-level mods/ folder from earlier
+        # installs so WoT cannot load two competing versions.
+        legacy = os.path.join(wot_path, "mods", "mohjos_damagerace.wotmod")
+        if os.path.isfile(legacy):
+            try:
+                os.remove(legacy)
+            except OSError:
+                pass
+
         config_dir = os.path.join(wot_path, "res_mods", version, "mods", "damagerace")
         os.makedirs(config_dir, exist_ok=True)
         with open(os.path.join(config_dir, "config.json"), "w", encoding="utf-8") as fh:
