@@ -3,54 +3,80 @@
 # Install location: World_of_Tanks/mods/<version>/mohjos_damagerace.wotmod
 # Config location:  World_of_Tanks/res_mods/<version>/mods/damagerace/config.json
 #
-# The module hooks PlayerAvatar.showShotResults to identify the last target
-# the player hit and PlayerAvatar.updateVehicleHealth to compute the actual
-# damage delta. Damage events are debounced for `send_interval_ms` and pushed
-# to the DamageRace server via BigWorld.fetchURL.
+# This file is shipped as plain Python source inside the .wotmod archive so
+# WoT compiles it with its own interpreter (Python 3.8 on 2.x clients, 2.7
+# on 1.x clients). All module-level work is guarded so a defective install
+# never crashes the game.
 
 import json
 import os
 import uuid
 
-import Avatar
-import BigWorld
+try:
+    import Avatar
+    import BigWorld
+except Exception:  # pragma: no cover - only meaningful inside WoT
+    Avatar = None
+    BigWorld = None
 
-# ---------------------------------------------------------------------------
-# Config
 
 _MOD_NAME = 'DamageRace'
 
 
-def _resolve_config_path():
-    """Walk up from this file (which lives inside a .wotmod ZIP) until we
-    hit a directory that contains WorldOfTanks.exe -- the game root -- then
-    look for the config in res_mods/<version>/mods/damagerace/config.json.
+def _log_info(message):
+    try:
+        BigWorld.logInfo(_MOD_NAME, message, None)
+    except Exception:
+        pass
 
-    We pick the newest res_mods version folder so the install matches what
-    the desktop client just wrote.
-    """
+
+def _log_warning(message):
+    try:
+        BigWorld.logWarning(_MOD_NAME, message, None)
+    except Exception:
+        pass
+
+
+def _log_error(message):
+    try:
+        BigWorld.logError(_MOD_NAME, message, None)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Config discovery.
+
+def _resolve_config_path():
+    """Walk up from this file until we reach a directory that contains
+    WorldOfTanks.exe, then return the newest matching config under
+    res_mods/<version>/mods/damagerace/config.json."""
     try:
         cursor = os.path.dirname(os.path.abspath(__file__))
     except Exception:
         return None
-    for _ in range(10):
-        if os.path.isfile(os.path.join(cursor, 'WorldOfTanks.exe')):
-            res_mods = os.path.join(cursor, 'res_mods')
-            if os.path.isdir(res_mods):
-                try:
-                    versions = sorted(
-                        [d for d in os.listdir(res_mods)
-                         if os.path.isdir(os.path.join(res_mods, d))
-                         and d[:1].isdigit()],
-                        reverse=True,
-                    )
-                except OSError:
-                    versions = []
-                for version in versions:
-                    candidate = os.path.join(res_mods, version,
-                                             'mods', 'damagerace', 'config.json')
-                    if os.path.isfile(candidate):
-                        return candidate
+    for _ in range(12):
+        try:
+            if os.path.isfile(os.path.join(cursor, 'WorldOfTanks.exe')):
+                res_mods = os.path.join(cursor, 'res_mods')
+                if os.path.isdir(res_mods):
+                    try:
+                        versions = sorted(
+                            [d for d in os.listdir(res_mods)
+                             if os.path.isdir(os.path.join(res_mods, d))
+                             and d[:1].isdigit()],
+                            reverse=True,
+                        )
+                    except OSError:
+                        versions = []
+                    for version in versions:
+                        candidate = os.path.join(res_mods, version,
+                                                 'mods', 'damagerace',
+                                                 'config.json')
+                        if os.path.isfile(candidate):
+                            return candidate
+                return None
+        except Exception:
             return None
         parent = os.path.dirname(cursor)
         if parent == cursor:
@@ -59,51 +85,39 @@ def _resolve_config_path():
     return None
 
 
-_CONFIG_PATH = _resolve_config_path()
-
 _DEFAULT_CONFIG = {
     'server_url':          'https://mohjos-damagerace.duckdns.org',
-    'streamer_token':      '',    # multi-tenant identifier issued at join time
-    'streamer_name':       '',    # legacy fallback for single-tenant setups
+    'streamer_token':      '',
+    'streamer_name':       '',
     'enabled':             True,
     'send_interval_ms':    200,
     'allowed_arena_types': [1, 7],
-    'max_damage_per_send': 10000, # sanity clamp; protects against bad reads
+    'max_damage_per_send': 10000,
 }
 
 
 def _load_config():
-    if not _CONFIG_PATH:
-        BigWorld.logWarning(
-            _MOD_NAME,
-            'Could not locate config.json (no res_mods/<version>/mods/'
-            'damagerace/config.json under any parent directory); using '
-            'defaults.',
-            None,
-        )
+    path = _resolve_config_path()
+    if not path:
+        _log_warning('Could not locate config.json; using defaults.')
         return dict(_DEFAULT_CONFIG)
     try:
-        with open(_CONFIG_PATH, 'r') as fh:
+        with open(path, 'r') as fh:
             loaded = json.load(fh)
         merged = dict(_DEFAULT_CONFIG)
         merged.update(loaded)
-        BigWorld.logInfo(_MOD_NAME, 'Config loaded from %s' % _CONFIG_PATH, None)
+        _log_info('Config loaded from %s' % path)
         return merged
     except Exception as exc:
-        BigWorld.logWarning(
-            _MOD_NAME,
-            'Failed to read config (%s); using defaults. Path: %s'
-            % (exc, _CONFIG_PATH),
-            None,
-        )
+        _log_warning('Failed to read config (%s); using defaults. Path: %s'
+                     % (exc, path))
         return dict(_DEFAULT_CONFIG)
 
 
 _cfg = _load_config()
 
-# ---------------------------------------------------------------------------
-# Runtime state. Mutable closure containers because Python 2.7 lacks `nonlocal`.
-
+# Mutable closure containers; classic WoT mod pattern that stays compatible
+# with both Python 2.7 (1.x clients) and 3.8 (2.x clients).
 _in_battle = [False]
 _last_shot_target_id = [None]
 _vehicle_hp_cache = {}
@@ -132,78 +146,6 @@ def _is_allowed_arena():
 
 
 # ---------------------------------------------------------------------------
-# Hook 1: own shot landed on a target.
-
-_orig_show_shot_results = Avatar.PlayerAvatar.showShotResults
-
-
-def _hook_show_shot_results(self, *args, **kwargs):
-    _orig_show_shot_results(self, *args, **kwargs)
-
-    if not _in_battle[0] or not _cfg.get('enabled', True):
-        return
-    if not _is_allowed_arena():
-        return
-
-    try:
-        if len(args) < 2:
-            return
-        shooter_id, target_id = args[0], args[1]
-        player = _player()
-        if player is None or shooter_id != player.playerVehicleID:
-            return
-        _last_shot_target_id[0] = target_id
-        target = BigWorld.entities.get(target_id)
-        if target is not None and hasattr(target, 'health'):
-            _vehicle_hp_cache[target_id] = target.health
-    except Exception as exc:
-        BigWorld.logWarning(_MOD_NAME, 'showShotResults hook error: %s' % exc, None)
-
-
-Avatar.PlayerAvatar.showShotResults = _hook_show_shot_results
-
-
-# ---------------------------------------------------------------------------
-# Hook 2: vehicle health update -> compute damage delta.
-
-_orig_update_vehicle_health = Avatar.PlayerAvatar.updateVehicleHealth
-
-
-def _hook_update_vehicle_health(self, vehicle_id, health, *args, **kwargs):
-    previous = _vehicle_hp_cache.get(vehicle_id)
-    _orig_update_vehicle_health(self, vehicle_id, health, *args, **kwargs)
-
-    if not _in_battle[0] or not _cfg.get('enabled', True):
-        return
-    if vehicle_id != _last_shot_target_id[0]:
-        return
-    if previous is None:
-        _vehicle_hp_cache[vehicle_id] = health
-        return
-
-    _vehicle_hp_cache[vehicle_id] = health
-    try:
-        damage = int(previous) - int(health)
-    except (TypeError, ValueError):
-        return
-
-    if damage <= 0:
-        return
-
-    cap = _cfg.get('max_damage_per_send', 10000)
-    if cap and damage > cap:
-        BigWorld.logWarning(_MOD_NAME, 'Clamped implausible damage: %d -> %d'
-                            % (damage, cap), None)
-        damage = cap
-
-    _pending_damage[0] += damage
-    _schedule_send()
-
-
-Avatar.PlayerAvatar.updateVehicleHealth = _hook_update_vehicle_health
-
-
-# ---------------------------------------------------------------------------
 # Outgoing HTTP.
 
 def _schedule_send():
@@ -212,8 +154,11 @@ def _schedule_send():
             BigWorld.cancelCallback(_send_timer[0])
         except Exception:
             pass
-    interval = _cfg.get('send_interval_ms', 200) / 1000.0
-    _send_timer[0] = BigWorld.callback(interval, _do_send)
+    try:
+        interval = float(_cfg.get('send_interval_ms', 200)) / 1000.0
+        _send_timer[0] = BigWorld.callback(interval, _do_send)
+    except Exception as exc:
+        _log_warning('callback scheduling failed: %s' % exc)
 
 
 def _do_send():
@@ -223,96 +168,155 @@ def _do_send():
         return
     _pending_damage[0] = 0
 
-    url = _cfg['server_url'].rstrip('/') + '/damage'
-    key = str(uuid.uuid4())
-    token = _cfg.get('streamer_token') or _cfg.get('streamer_name') or ''
-    payload = json.dumps({
-        'streamer_token': token,
-        'damage':         damage,
-        'key':            key,
-    })
+    try:
+        url = _cfg['server_url'].rstrip('/') + '/damage'
+        key = str(uuid.uuid4())
+        token = _cfg.get('streamer_token') or _cfg.get('streamer_name') or ''
+        payload = json.dumps({
+            'streamer_token': token,
+            'damage':         damage,
+            'key':            key,
+        })
+    except Exception as exc:
+        _log_error('payload build failed: %s' % exc)
+        return
 
     def _on_response(data):
-        # `data is None` indicates a network-level failure. Retry after 5s.
         if data is None:
-            BigWorld.logWarning(
-                _MOD_NAME,
-                'HTTP POST failed; retrying %d damage in 5s.' % damage,
-                None,
-            )
+            _log_warning('HTTP POST failed; retrying %d damage in 5s.' % damage)
             _pending_damage[0] += damage
-            BigWorld.callback(5.0, _do_send)
+            try:
+                BigWorld.callback(5.0, _do_send)
+            except Exception:
+                pass
 
     try:
         BigWorld.fetchURL(url, _on_response,
                           {'Content-Type': 'application/json'}, payload)
     except TypeError:
-        # Older BigWorld signatures accept a header string instead of dict.
         try:
             BigWorld.fetchURL(url, _on_response,
                               'Content-Type: application/json\r\n', payload)
         except Exception:
-            # Last-resort GET fallback.
             get_url = '%s?streamer_token=%s&damage=%d&key=%s' % (
                 url, token, damage, key,
             )
             try:
                 BigWorld.fetchURL(get_url, _on_response)
             except Exception as exc:
-                BigWorld.logError(_MOD_NAME,
-                                  'fetchURL failed entirely: %s' % exc, None)
+                _log_error('fetchURL failed entirely: %s' % exc)
+    except Exception as exc:
+        _log_error('fetchURL crashed: %s' % exc)
 
 
 # ---------------------------------------------------------------------------
-# Battle lifecycle.
+# Hook installation. Every patch is wrapped so a missing attribute on a
+# given WoT release degrades gracefully instead of crashing the launcher.
 
 _ARENA_PERIOD_BATTLE = 3
 _ARENA_PERIOD_AFTERBATTLE = 4
 
-_orig_on_arena_period_change = Avatar.PlayerAvatar.onArenaPeriodChange
+
+def _install_hooks():
+    if Avatar is None or BigWorld is None:
+        return
+
+    if not hasattr(Avatar, 'PlayerAvatar'):
+        _log_error('Avatar.PlayerAvatar missing; aborting hook install.')
+        return
+
+    player_avatar = Avatar.PlayerAvatar
+
+    if hasattr(player_avatar, 'showShotResults'):
+        orig_show_shot_results = player_avatar.showShotResults
+
+        def hook_show_shot_results(self, *args, **kwargs):
+            orig_show_shot_results(self, *args, **kwargs)
+            if not _in_battle[0] or not _cfg.get('enabled', True):
+                return
+            if not _is_allowed_arena():
+                return
+            try:
+                if len(args) < 2:
+                    return
+                shooter_id, target_id = args[0], args[1]
+                player = _player()
+                if player is None or shooter_id != player.playerVehicleID:
+                    return
+                _last_shot_target_id[0] = target_id
+                target = BigWorld.entities.get(target_id)
+                if target is not None and hasattr(target, 'health'):
+                    _vehicle_hp_cache[target_id] = target.health
+            except Exception as exc:
+                _log_warning('showShotResults hook error: %s' % exc)
+
+        player_avatar.showShotResults = hook_show_shot_results
+
+    if hasattr(player_avatar, 'updateVehicleHealth'):
+        orig_update_health = player_avatar.updateVehicleHealth
+
+        def hook_update_health(self, vehicle_id, health, *args, **kwargs):
+            previous = _vehicle_hp_cache.get(vehicle_id)
+            orig_update_health(self, vehicle_id, health, *args, **kwargs)
+            if not _in_battle[0] or not _cfg.get('enabled', True):
+                return
+            if vehicle_id != _last_shot_target_id[0]:
+                return
+            if previous is None:
+                _vehicle_hp_cache[vehicle_id] = health
+                return
+            _vehicle_hp_cache[vehicle_id] = health
+            try:
+                damage = int(previous) - int(health)
+            except (TypeError, ValueError):
+                return
+            if damage <= 0:
+                return
+            cap = _cfg.get('max_damage_per_send', 10000)
+            if cap and damage > cap:
+                _log_warning('Clamped implausible damage: %d -> %d'
+                             % (damage, cap))
+                damage = cap
+            _pending_damage[0] += damage
+            _schedule_send()
+
+        player_avatar.updateVehicleHealth = hook_update_health
+
+    if hasattr(player_avatar, 'onArenaPeriodChange'):
+        orig_period_change = player_avatar.onArenaPeriodChange
+
+        def hook_period_change(self, period, *args, **kwargs):
+            orig_period_change(self, period, *args, **kwargs)
+            if period == _ARENA_PERIOD_BATTLE:
+                if not _is_allowed_arena():
+                    _log_info('Arena type not allowed; damage will not be tracked.')
+                    return
+                _in_battle[0] = True
+                _vehicle_hp_cache.clear()
+                _last_shot_target_id[0] = None
+                try:
+                    player = _player()
+                    if player and hasattr(player, 'arena'):
+                        for vehicle_id in player.arena.vehicles:
+                            entity = BigWorld.entities.get(vehicle_id)
+                            if entity is not None and hasattr(entity, 'health'):
+                                _vehicle_hp_cache[vehicle_id] = entity.health
+                except Exception as exc:
+                    _log_warning('HP cache priming failed: %s' % exc)
+                _log_info('Battle started -- DamageRace active.')
+            elif period >= _ARENA_PERIOD_AFTERBATTLE:
+                _in_battle[0] = False
+                if _pending_damage[0] > 0:
+                    _do_send()
+                _log_info('Battle ended.')
+
+        player_avatar.onArenaPeriodChange = hook_period_change
 
 
-def _hook_on_arena_period_change(self, period, *args, **kwargs):
-    _orig_on_arena_period_change(self, period, *args, **kwargs)
-
-    if period == _ARENA_PERIOD_BATTLE:
-        if not _is_allowed_arena():
-            BigWorld.logInfo(_MOD_NAME,
-                             'Arena type not allowed; damage will not be tracked.',
-                             None)
-            return
-        _in_battle[0] = True
-        _vehicle_hp_cache.clear()
-        _last_shot_target_id[0] = None
-
-        try:
-            player = _player()
-            if player and hasattr(player, 'arena'):
-                for vehicle_id in player.arena.vehicles:
-                    entity = BigWorld.entities.get(vehicle_id)
-                    if entity is not None and hasattr(entity, 'health'):
-                        _vehicle_hp_cache[vehicle_id] = entity.health
-        except Exception as exc:
-            BigWorld.logWarning(_MOD_NAME, 'HP cache priming failed: %s' % exc, None)
-
-        BigWorld.logInfo(_MOD_NAME, 'Battle started -- DamageRace active.', None)
-
-    elif period >= _ARENA_PERIOD_AFTERBATTLE:
-        _in_battle[0] = False
-        if _pending_damage[0] > 0:
-            _do_send()
-        BigWorld.logInfo(_MOD_NAME, 'Battle ended.', None)
-
-
-Avatar.PlayerAvatar.onArenaPeriodChange = _hook_on_arena_period_change
-
-
-# ---------------------------------------------------------------------------
-# Module init log.
-
-BigWorld.logInfo(
-    _MOD_NAME,
-    'Mohjos DamageRace loaded | server=%s | name=%s'
-    % (_cfg['server_url'], _cfg.get('streamer_name') or '(token only)'),
-    None,
-)
+try:
+    _install_hooks()
+    _log_info('Mohjos DamageRace loaded | server=%s | name=%s'
+              % (_cfg.get('server_url', ''),
+                 _cfg.get('streamer_name') or '(token only)'))
+except Exception as exc:
+    _log_error('Mod initialization failed: %s' % exc)
