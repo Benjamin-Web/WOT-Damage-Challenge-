@@ -234,12 +234,12 @@ class Database:
 
             slug = self._slug_for_user(twitch_login or owner_twitch_id, c)
             event_invite = _new_token('ev_')
-            c.execute('''
+            cur = c.execute('''
                 INSERT INTO events (owner_twitch_id, name, goal, mode, paused,
                                     total_dealt, event_invite_token, slug, created_at)
                 VALUES (?, ?, ?, ?, 0, 0, ?, ?, ?)
             ''', (owner_twitch_id, name, float(goal), mode, event_invite, slug, _now_iso()))
-            event_id = c.lastrowid
+            event_id = cur.lastrowid
 
             for i, spec in enumerate(team_specs[:4]):
                 c.execute('''
