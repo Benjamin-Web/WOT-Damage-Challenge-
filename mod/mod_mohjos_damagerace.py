@@ -1,12 +1,20 @@
-# Mohjos DamageRace -- community damage tracker for World of Tanks.
+# -*- coding: utf-8 -*-
+# Mohjos DamageRace -- community damage tracker for World of Tanks 1.x / 2.x.
 #
 # Install location: World_of_Tanks/mods/<version>/mohjos_damagerace.wotmod
 # Config location:  World_of_Tanks/res_mods/<version>/mods/damagerace/config.json
 #
-# This file is shipped as plain Python source inside the .wotmod archive so
-# WoT compiles it with its own interpreter (Python 3.8 on 2.x clients, 2.7
-# on 1.x clients). All module-level work is guarded so a defective install
-# never crashes the game.
+# WoT 2.x kept Python 2.7 as the runtime, but renamed two of the hooks we
+# rely on:
+#   * showShotResults stayed on PlayerAvatar (we use it to remember our
+#     last target id).
+#   * onArenaPeriodChange became name-mangled to
+#     _PlayerAvatar__onArenaPeriodChange.
+#   * Per-vehicle HP updates moved off PlayerAvatar entirely, onto the
+#     Vehicle entity class as Vehicle.onHealthChanged.
+#
+# Every hook attaches behind a feature-detection guard so a missing
+# attribute on an unfamiliar client never crashes the launcher.
 
 import json
 import os
@@ -17,21 +25,28 @@ import uuid
 try:
     import Avatar
     import BigWorld
-except Exception:  # pragma: no cover - only meaningful inside WoT
+except Exception:
     Avatar = None
     BigWorld = None
 
+try:
+    from Vehicle import Vehicle as _VehicleClass
+except Exception:
+    _VehicleClass = None
+
+try:
+    _INT_TYPES = (int, long)  # noqa: F821 (long only exists on Py2)
+except NameError:
+    _INT_TYPES = (int,)
+
 
 _MOD_NAME = 'DamageRace'
-
-# We also mirror every log line to a side-channel file so the mod can be
-# debugged even when BigWorld.logInfo is silently failing.
 _DEBUG_LOG = os.path.join(tempfile.gettempdir(), 'damagerace_debug.log')
 
 
 def _file_log(level, message):
     try:
-        with open(_DEBUG_LOG, 'a', encoding='utf-8') as fh:
+        with open(_DEBUG_LOG, 'a') as fh:
             fh.write('[%s] %s\n' % (level, message))
     except Exception:
         pass
@@ -42,10 +57,7 @@ def _log_info(message):
     try:
         BigWorld.logInfo(_MOD_NAME, message, None)
     except Exception:
-        try:
-            print('[%s] %s' % (_MOD_NAME, message))
-        except Exception:
-            pass
+        pass
 
 
 def _log_warning(message):
@@ -53,10 +65,7 @@ def _log_warning(message):
     try:
         BigWorld.logWarning(_MOD_NAME, message, None)
     except Exception:
-        try:
-            print('[%s] WARN: %s' % (_MOD_NAME, message))
-        except Exception:
-            pass
+        pass
 
 
 def _log_error(message):
@@ -64,25 +73,20 @@ def _log_error(message):
     try:
         BigWorld.logError(_MOD_NAME, message, None)
     except Exception:
-        try:
-            print('[%s] ERROR: %s' % (_MOD_NAME, message))
-        except Exception:
-            pass
+        pass
 
 
-_file_log('INFO', 'Module file loaded. Python=%s BigWorld=%s Avatar=%s'
+_file_log('INFO', 'Module imported. Python=%s BigWorld=%s Avatar=%s Vehicle=%s'
           % (sys.version.split()[0],
              'yes' if BigWorld is not None else 'no',
-             'yes' if Avatar is not None else 'no'))
+             'yes' if Avatar is not None else 'no',
+             'yes' if _VehicleClass is not None else 'no'))
 
 
 # ---------------------------------------------------------------------------
 # Config discovery.
 
 def _resolve_config_path():
-    """Walk up from this file until we reach a directory that contains
-    WorldOfTanks.exe, then return the newest matching config under
-    res_mods/<version>/mods/damagerace/config.json."""
     try:
         cursor = os.path.dirname(os.path.abspath(__file__))
     except Exception:
@@ -148,8 +152,6 @@ def _load_config():
 
 _cfg = _load_config()
 
-# Mutable closure containers; classic WoT mod pattern that stays compatible
-# with both Python 2.7 (1.x clients) and 3.8 (2.x clients).
 _in_battle = [False]
 _last_shot_target_id = [None]
 _vehicle_hp_cache = {}
@@ -221,6 +223,8 @@ def _do_send():
                 BigWorld.callback(5.0, _do_send)
             except Exception:
                 pass
+        else:
+            _log_info('Posted damage=%d' % damage)
 
     try:
         BigWorld.fetchURL(url, _on_response,
@@ -242,111 +246,141 @@ def _do_send():
 
 
 # ---------------------------------------------------------------------------
-# Hook installation. Every patch is wrapped so a missing attribute on a
-# given WoT release degrades gracefully instead of crashing the launcher.
+# Hook installation.
 
 _ARENA_PERIOD_BATTLE = 3
 _ARENA_PERIOD_AFTERBATTLE = 4
 
+# WoT 2.x renamed onArenaPeriodChange to a name-mangled private method.
+# Try the public name first (older clients) and fall back to the mangled
+# variant.
+_ARENA_PERIOD_ATTRS = ('onArenaPeriodChange',
+                       '_PlayerAvatar__onArenaPeriodChange')
 
-def _install_hooks():
-    if Avatar is None or BigWorld is None:
+
+def _find_attr(target, names):
+    for name in names:
+        if hasattr(target, name):
+            return name
+    return None
+
+
+def _install_player_avatar_hooks():
+    if Avatar is None or not hasattr(Avatar, 'PlayerAvatar'):
+        _log_error('Avatar.PlayerAvatar unavailable; player hooks skipped.')
         return
 
-    if not hasattr(Avatar, 'PlayerAvatar'):
-        _log_error('Avatar.PlayerAvatar missing; aborting hook install.')
-        return
+    cls = Avatar.PlayerAvatar
 
-    player_avatar = Avatar.PlayerAvatar
-
-    if hasattr(player_avatar, 'showShotResults'):
-        orig_show_shot_results = player_avatar.showShotResults
+    # showShotResults -- remember the last enemy id we hit.
+    if hasattr(cls, 'showShotResults'):
+        orig = cls.showShotResults
 
         def hook_show_shot_results(self, *args, **kwargs):
-            orig_show_shot_results(self, *args, **kwargs)
+            orig(self, *args, **kwargs)
             if not _in_battle[0] or not _cfg.get('enabled', True):
                 return
             if not _is_allowed_arena():
                 return
             try:
-                if len(args) < 2:
-                    return
-                shooter_id, target_id = args[0], args[1]
-                player = _player()
-                if player is None or shooter_id != player.playerVehicleID:
-                    return
-                _last_shot_target_id[0] = target_id
-                target = BigWorld.entities.get(target_id)
-                if target is not None and hasattr(target, 'health'):
-                    _vehicle_hp_cache[target_id] = target.health
+                # Older signatures pass (shooterID, targetID, ...). Newer
+                # builds pass a packed results array. We capture both.
+                if len(args) >= 2 and isinstance(args[0], _INT_TYPES):
+                    shooter_id = args[0]
+                    target_id = args[1]
+                    player = _player()
+                    if player is None or shooter_id != player.playerVehicleID:
+                        return
+                    _last_shot_target_id[0] = target_id
+                elif len(args) >= 1 and hasattr(args[0], '__iter__'):
+                    # Packed results: first element typically encodes target id
+                    try:
+                        first = args[0][0]
+                        target_id = int(first) >> 16
+                        _last_shot_target_id[0] = target_id
+                    except Exception:
+                        pass
             except Exception as exc:
                 _log_warning('showShotResults hook error: %s' % exc)
 
-        player_avatar.showShotResults = hook_show_shot_results
+        cls.showShotResults = hook_show_shot_results
+        _log_info('Hook installed: PlayerAvatar.showShotResults')
+    else:
+        _log_warning('PlayerAvatar.showShotResults missing.')
 
-    if hasattr(player_avatar, 'updateVehicleHealth'):
-        orig_update_health = player_avatar.updateVehicleHealth
+    # Arena period change -- battle start / end.
+    arena_attr = _find_attr(cls, _ARENA_PERIOD_ATTRS)
+    if arena_attr:
+        orig_period = getattr(cls, arena_attr)
 
-        def hook_update_health(self, vehicle_id, health, *args, **kwargs):
-            previous = _vehicle_hp_cache.get(vehicle_id)
-            orig_update_health(self, vehicle_id, health, *args, **kwargs)
-            if not _in_battle[0] or not _cfg.get('enabled', True):
-                return
-            if vehicle_id != _last_shot_target_id[0]:
-                return
-            if previous is None:
-                _vehicle_hp_cache[vehicle_id] = health
-                return
-            _vehicle_hp_cache[vehicle_id] = health
+        def hook_arena_period(self, period, *args, **kwargs):
+            orig_period(self, period, *args, **kwargs)
             try:
-                damage = int(previous) - int(health)
-            except (TypeError, ValueError):
-                return
-            if damage <= 0:
-                return
-            cap = _cfg.get('max_damage_per_send', 10000)
-            if cap and damage > cap:
-                _log_warning('Clamped implausible damage: %d -> %d'
-                             % (damage, cap))
-                damage = cap
-            _pending_damage[0] += damage
-            _schedule_send()
+                if period == _ARENA_PERIOD_BATTLE:
+                    if not _is_allowed_arena():
+                        _log_info('Arena type filtered out.')
+                        return
+                    _in_battle[0] = True
+                    _vehicle_hp_cache.clear()
+                    _last_shot_target_id[0] = None
+                    _log_info('Battle started -- DamageRace active.')
+                elif period >= _ARENA_PERIOD_AFTERBATTLE:
+                    _in_battle[0] = False
+                    if _pending_damage[0] > 0:
+                        _do_send()
+                    _log_info('Battle ended.')
+            except Exception as exc:
+                _log_warning('arena period hook error: %s' % exc)
 
-        player_avatar.updateVehicleHealth = hook_update_health
+        setattr(cls, arena_attr, hook_arena_period)
+        _log_info('Hook installed: PlayerAvatar.%s' % arena_attr)
+    else:
+        _log_warning('PlayerAvatar.onArenaPeriodChange variants missing.')
 
-    if hasattr(player_avatar, 'onArenaPeriodChange'):
-        orig_period_change = player_avatar.onArenaPeriodChange
 
-        def hook_period_change(self, period, *args, **kwargs):
-            orig_period_change(self, period, *args, **kwargs)
-            if period == _ARENA_PERIOD_BATTLE:
-                if not _is_allowed_arena():
-                    _log_info('Arena type not allowed; damage will not be tracked.')
+def _install_vehicle_hooks():
+    if _VehicleClass is None:
+        _log_warning('Vehicle class unavailable; damage tracking limited.')
+        return
+
+    if hasattr(_VehicleClass, 'onHealthChanged'):
+        orig = _VehicleClass.onHealthChanged
+
+        def hook_on_health_changed(self, new_health, *args, **kwargs):
+            previous = _vehicle_hp_cache.get(self.id)
+            orig(self, new_health, *args, **kwargs)
+            try:
+                _vehicle_hp_cache[self.id] = new_health
+                if not _in_battle[0] or not _cfg.get('enabled', True):
                     return
-                _in_battle[0] = True
-                _vehicle_hp_cache.clear()
-                _last_shot_target_id[0] = None
-                try:
-                    player = _player()
-                    if player and hasattr(player, 'arena'):
-                        for vehicle_id in player.arena.vehicles:
-                            entity = BigWorld.entities.get(vehicle_id)
-                            if entity is not None and hasattr(entity, 'health'):
-                                _vehicle_hp_cache[vehicle_id] = entity.health
-                except Exception as exc:
-                    _log_warning('HP cache priming failed: %s' % exc)
-                _log_info('Battle started -- DamageRace active.')
-            elif period >= _ARENA_PERIOD_AFTERBATTLE:
-                _in_battle[0] = False
-                if _pending_damage[0] > 0:
-                    _do_send()
-                _log_info('Battle ended.')
+                if self.id != _last_shot_target_id[0]:
+                    return
+                if previous is None:
+                    return
+                damage = int(previous) - int(new_health)
+                if damage <= 0:
+                    return
+                cap = _cfg.get('max_damage_per_send', 10000)
+                if cap and damage > cap:
+                    _log_warning('Clamped implausible damage: %d -> %d'
+                                 % (damage, cap))
+                    damage = cap
+                _pending_damage[0] += damage
+                _file_log('INFO', 'Recorded damage=%d on target=%s'
+                          % (damage, self.id))
+                _schedule_send()
+            except Exception as exc:
+                _log_warning('onHealthChanged hook error: %s' % exc)
 
-        player_avatar.onArenaPeriodChange = hook_period_change
+        _VehicleClass.onHealthChanged = hook_on_health_changed
+        _log_info('Hook installed: Vehicle.onHealthChanged')
+    else:
+        _log_warning('Vehicle.onHealthChanged missing.')
 
 
 try:
-    _install_hooks()
+    _install_player_avatar_hooks()
+    _install_vehicle_hooks()
     _log_info('Mohjos DamageRace loaded | server=%s | name=%s'
               % (_cfg.get('server_url', ''),
                  _cfg.get('streamer_name') or '(token only)'))

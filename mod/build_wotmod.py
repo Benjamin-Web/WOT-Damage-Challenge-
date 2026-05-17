@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 """Build the mohjos_damagerace.wotmod archive.
 
-We ship the .py source file rather than a precompiled .pyc so the WoT
-client compiles the module with its own Python (3.8 on 2.x clients, 2.7
-on legacy 1.x clients). This avoids the bytecode magic mismatch that
-crashes WoT when the .pyc is built with the wrong interpreter.
+WoT (1.x and 2.x) ignores .py files inside a .wotmod and only executes
+.pyc bytecode under res/scripts/client/gui/mods/. The bytecode magic has
+to match the interpreter shipped with WoT, which is still Python 2.7.
 
 Usage:
 
-    python mod\\build_wotmod.py
+    C:\\Python27\\python.exe mod\\build_wotmod.py
 """
-from __future__ import print_function
-
 import os
+import py_compile
 import shutil
 import sys
 import tempfile
@@ -22,7 +20,8 @@ SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 SOURCE_PY     = os.path.join(SCRIPT_DIR, 'mod_mohjos_damagerace.py')
 DIST_DIR      = os.path.join(SCRIPT_DIR, '..', 'dist')
 OUTPUT        = os.path.join(DIST_DIR, 'mohjos_damagerace.wotmod')
-INTERNAL_PATH = 'res/scripts/client/gui/mods/mod_mohjos_damagerace.py'
+INTERNAL_PY   = 'res/scripts/client/gui/mods/mod_mohjos_damagerace.py'
+INTERNAL_PYC  = 'res/scripts/client/gui/mods/mod_mohjos_damagerace.pyc'
 
 MOD_ID      = 'com.mohjos.damagerace'
 MOD_NAME    = 'Mohjos DamageRace'
@@ -45,19 +44,36 @@ def build():
         print('ERROR: Source file not found: %s' % SOURCE_PY)
         sys.exit(1)
 
-    if not os.path.exists(DIST_DIR):
-        os.makedirs(DIST_DIR)
+    if sys.version_info[0] != 2 or sys.version_info[1] < 7:
+        print('ERROR: Python 2.7 is required to produce WoT-compatible '
+              'bytecode. Current interpreter: %s' % sys.version)
+        sys.exit(1)
 
-    print('Packaging %s' % OUTPUT)
-    with zipfile.ZipFile(OUTPUT, 'w', zipfile.ZIP_STORED) as zf:
-        zf.writestr('meta.xml', META_XML)
-        zf.write(SOURCE_PY, INTERNAL_PATH)
-    print('  OK: %s' % OUTPUT)
+    tmp_dir = tempfile.mkdtemp()
+    pyc_path = os.path.join(tmp_dir, 'mod_mohjos_damagerace.pyc')
 
-    print('')
-    print('Done. Next steps:')
-    print('  1. dist/mohjos_damagerace.wotmod -> World_of_Tanks/mods/<version>/')
-    print('  2. Config in: World_of_Tanks/res_mods/<version>/mods/damagerace/config.json')
+    try:
+        print('Compiling %s' % SOURCE_PY)
+        py_compile.compile(SOURCE_PY, pyc_path, doraise=True)
+        print('  OK')
+
+        if not os.path.exists(DIST_DIR):
+            os.makedirs(DIST_DIR)
+
+        print('Packaging %s' % OUTPUT)
+        # ZIP_STORED -- some WoT loaders reject deflated archives.
+        with zipfile.ZipFile(OUTPUT, 'w', zipfile.ZIP_STORED) as zf:
+            zf.writestr('meta.xml', META_XML)
+            zf.write(SOURCE_PY, INTERNAL_PY)     # source for reference
+            zf.write(pyc_path,  INTERNAL_PYC)    # actual entry point
+        print('  OK: %s' % OUTPUT)
+
+        print('')
+        print('Done. Install dist/mohjos_damagerace.wotmod into:')
+        print('    <WoT>/mods/<version>/mohjos_damagerace.wotmod')
+
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 if __name__ == '__main__':
