@@ -123,7 +123,7 @@
         const res = await fetch('/api/invite/' + encodeURIComponent(token));
         const data = await res.json();
         if (!data.ok) { return showInvalid(); }
-        render(data.kind, data.info);
+        render(data.kind, data);
       } catch (e) {
         showInvalid();
       }
