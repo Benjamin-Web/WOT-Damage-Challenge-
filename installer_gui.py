@@ -55,6 +55,9 @@ ACCENT   = "#ffd700"
 ACCENT2  = "#efb700"
 TWITCH   = "#9146ff"
 TWITCH2  = "#7d2def"
+KOFI     = "#ff5e5b"
+KOFI2    = "#e84541"
+KOFI_URL = "https://ko-fi.com/ronincannons"
 GREEN    = "#00e676"
 RED      = "#cf6679"
 WARN     = "#ff9800"
@@ -142,6 +145,10 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "common.refresh":           {"de": "Aktualisieren", "en": "Refresh"},
     "common.error":             {"de": "Fehler", "en": "Error"},
     "server.label":             {"de": "Server", "en": "Server"},
+    "support.kofi":             {"de": "☕  Auf Ko-fi unterstuetzen",
+                                 "en": "☕  Support on Ko-fi"},
+    "support.note":             {"de": "Falls dir DamageRace gefaellt, hilf mit die Serverkosten zu decken — danke!",
+                                 "en": "If you enjoy DamageRace, help cover the server costs — thanks!"},
 
     "login.title":              {"de": "Veranstalter-Login",
                                  "en": "Organizer login"},
@@ -569,9 +576,32 @@ class App(ctk.CTk):
                         "#03dac6", self.show_participant
                         ).pack(fill="x")
 
-        ctk.CTkLabel(self, text=f"{t('server.label')}: {SERVER_URL}",
-                     font=ctk.CTkFont(FONT_FAM, 10),
-                     text_color=DIM).pack(side="bottom", pady=10)
+        footer = ctk.CTkFrame(self, fg_color="transparent")
+        footer.pack(side="bottom", fill="x", pady=10)
+
+        ctk.CTkButton(
+            footer,
+            text=t("support.kofi"),
+            font=ctk.CTkFont(FONT_FAM, 11, "bold"),
+            height=32,
+            fg_color=KOFI, hover_color=KOFI2,
+            text_color="#fff",
+            corner_radius=8,
+            width=200,
+            command=lambda: webbrowser.open(KOFI_URL),
+        ).pack(pady=(0, 6))
+
+        ctk.CTkLabel(
+            footer, text=t("support.note"),
+            font=ctk.CTkFont(FONT_FAM, 10),
+            text_color=DIM, wraplength=440, justify="center",
+        ).pack()
+
+        ctk.CTkLabel(
+            footer, text=f"{t('server.label')}: {SERVER_URL}",
+            font=ctk.CTkFont(FONT_FAM, 9),
+            text_color=DIM,
+        ).pack(pady=(8, 0))
 
     def _mode_card(self, parent: tk.Misc, title_text: str, desc: str,
                    badge: str, color: str, command: Any) -> ctk.CTkFrame:
