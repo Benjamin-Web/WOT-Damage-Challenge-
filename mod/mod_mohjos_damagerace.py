@@ -265,6 +265,40 @@ def _find_attr(target, names):
     return None
 
 
+def _extract_shot_target(args):
+    """Pull the vehicle id out of WoT's showShotResults arguments.
+
+    WoT 2.x calls the hook with a single PyArrayDataInstance whose entries
+    are dict-like objects exposing a `vehicleID` field. Legacy clients
+    pass (shooter_id, target_id, ...). We accept both."""
+    if not args:
+        return None
+    if len(args) >= 2 and isinstance(args[0], _INT_TYPES):
+        player = _player()
+        if player is None or args[0] != player.playerVehicleID:
+            return None
+        return args[1]
+    head = args[0]
+    if not head:
+        return None
+    try:
+        entry = head[0]
+    except Exception:
+        return None
+    for accessor in (
+        lambda e: e['vehicleID'],
+        lambda e: getattr(e, 'vehicleID'),
+        lambda e: e.get('vehicleID'),
+    ):
+        try:
+            value = accessor(entry)
+        except Exception:
+            continue
+        if isinstance(value, _INT_TYPES):
+            return value
+    return None
+
+
 def _install_player_avatar_hooks():
     if Avatar is None or not hasattr(Avatar, 'PlayerAvatar'):
         _log_error('Avatar.PlayerAvatar unavailable; player hooks skipped.')
@@ -283,27 +317,10 @@ def _install_player_avatar_hooks():
             if not _is_allowed_arena():
                 return
             try:
-                _file_log('TRACE',
-                          'showShotResults args=%d types=%s preview=%s'
-                          % (len(args),
-                             [type(a).__name__ for a in args[:4]],
-                             repr(args[:2])[:200]))
-                if len(args) >= 2 and isinstance(args[0], _INT_TYPES):
-                    shooter_id, target_id = args[0], args[1]
-                    player = _player()
-                    if player is None or shooter_id != player.playerVehicleID:
-                        return
+                target_id = _extract_shot_target(args)
+                if target_id is not None:
                     _last_shot_target_id[0] = target_id
                     _file_log('INFO', 'Shot landed on target=%s' % target_id)
-                elif len(args) >= 1 and hasattr(args[0], '__iter__'):
-                    try:
-                        first = args[0][0]
-                        target_id = int(first) >> 16
-                        _last_shot_target_id[0] = target_id
-                        _file_log('INFO', 'Shot (packed) on target=%s raw=%s'
-                                  % (target_id, first))
-                    except Exception as exc:
-                        _file_log('WARN', 'packed result parse failed: %s' % exc)
             except Exception as exc:
                 _log_warning('showShotResults hook error: %s' % exc)
 
