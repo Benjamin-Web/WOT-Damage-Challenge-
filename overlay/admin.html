@@ -474,6 +474,12 @@
                     font-family:'JetBrains Mono', monospace;
                     color:var(--text-primary); margin:0; white-space:pre-wrap;
                     word-break:break-all;"></pre>
+        <button id="token-install-btn" class="copy-btn"
+                style="display:none; margin-top:10px; width:100%; padding:10px;
+                       font-size:13px; background:rgba(0,230,118,0.18);
+                       border-color:rgba(0,230,118,0.4); color:#a7ffce;"
+                onclick="installModFromModal()"
+                data-i18n="admin.token.install_btn">＞  Mod jetzt installieren</button>
         <button class="copy-btn"
                 style="margin-top:10px; width:100%; padding:10px; font-size:13px;"
                 onclick="copyText(document.getElementById('token-modal-config').textContent)"
@@ -1021,7 +1027,9 @@
       }
     }
 
+    let _modalContext = { token: '', wotName: '' };
     function openTokenModal(wotName, token) {
+      _modalContext = { token, wotName };
       document.getElementById('token-modal-name').textContent = wotName;
       document.getElementById('token-modal-token').textContent = token;
       const cfg = {
@@ -1034,7 +1042,33 @@
       };
       document.getElementById('token-modal-config').textContent =
         JSON.stringify(cfg, null, 2);
+      const installBtn = document.getElementById('token-install-btn');
+      const canInstall = !!(window.pywebview && window.pywebview.api &&
+                            window.pywebview.api.install_mod);
+      installBtn.style.display = canInstall ? '' : 'none';
       document.getElementById('token-modal').classList.add('open');
+    }
+
+    async function installModFromModal() {
+      if (!window.pywebview || !window.pywebview.api ||
+          !window.pywebview.api.install_mod) return;
+      const { token, wotName } = _modalContext;
+      let result = await window.pywebview.api.install_mod(token, wotName);
+      if (!result.ok && result.needs_path) {
+        const userPath = prompt(i18n.t('admin.token.install_prompt_path'));
+        if (!userPath) return;
+        result = await window.pywebview.api.install_mod(token, wotName, userPath);
+      }
+      if (result.ok) {
+        toast(i18n.t('admin.toast.mod_installed')
+              .replace('{ver}', result.version || ''));
+        closeTokenModal();
+      } else if (result.error === 'wot_not_found') {
+        toast(i18n.t('admin.toast.mod_no_wot'));
+      } else {
+        toast(i18n.t('admin.toast.mod_install_failed') +
+              ' (' + (result.detail || result.error || '') + ')');
+      }
     }
     function closeTokenModal() {
       document.getElementById('token-modal').classList.remove('open');
@@ -1144,7 +1178,7 @@
       removeTeam, wizardSubmit, setGoal, togglePause, resetEvent,
       regenerate, copyText,
       addStreamer, removeStreamer, joinSelf,
-      showStreamerToken, openTokenModal, closeTokenModal,
+      showStreamerToken, openTokenModal, closeTokenModal, installModFromModal,
       onChipDragStart, onChipDragEnd,
       onTeamDragOver, onTeamDragLeave, onTeamDrop,
       saveDiscordWebhook, testDiscord, finishEvent, addToObs,

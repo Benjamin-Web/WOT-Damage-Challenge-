@@ -1272,7 +1272,10 @@ def _open_admin_webview() -> None:
             data[key] = value
             _save_user_settings(data)
 
-        bridge = WebviewBridge(settings_get=_get, settings_set=_set)
+        bridge = WebviewBridge(
+            settings_get=_get, settings_set=_set,
+            install_mod=install_mod, find_wot=find_wot,
+        )
     except ImportError:
         bridge = None
 

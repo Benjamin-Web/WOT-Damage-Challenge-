@@ -32,9 +32,45 @@ class WebviewBridge:
     """
 
     def __init__(self, settings_get: Callable[[str], str | None],
-                 settings_set: Callable[[str, str], None]) -> None:
+                 settings_set: Callable[[str, str], None],
+                 install_mod: Callable[[str, str], tuple] | None = None,
+                 find_wot: Callable[[], str] | None = None) -> None:
         self._settings_get = settings_get
         self._settings_set = settings_set
+        self._install_mod = install_mod
+        self._find_wot = find_wot
+
+    # ── WoT mod auto-install ─────────────────────────────────────────────────
+
+    def install_mod(self, streamer_token: str, wot_name: str,
+                    wot_path: str | None = None) -> dict:
+        """Copy the .wotmod file into the local WoT install and write the
+        config.json with ``streamer_token`` + ``wot_name``. Returns:
+
+        * ``{"ok": True, "path": "<wot path>", "version": "<x.y.z>"}``
+        * ``{"ok": False, "error": "wot_not_found", "needs_path": True}``
+          when the WoT install can't be auto-detected.
+        * ``{"ok": False, "error": "<key>", "detail": "<msg>"}`` otherwise.
+        """
+        if not streamer_token or not wot_name:
+            return {"ok": False, "error": "missing_args"}
+        if not self._install_mod or not self._find_wot:
+            return {"ok": False, "error": "installer_unavailable"}
+        path = (wot_path or self._settings_get("wot_path") or "").strip()
+        if not path or not self._is_valid_wot(path):
+            path = self._find_wot() or ""
+        if not path or not self._is_valid_wot(path):
+            return {"ok": False, "error": "wot_not_found", "needs_path": True}
+        ok, detail = self._install_mod(path, wot_name, streamer_token)
+        if not ok:
+            return {"ok": False, "error": "install_failed", "detail": detail}
+        self._settings_set("wot_path", path)
+        return {"ok": True, "path": path, "version": detail}
+
+    @staticmethod
+    def _is_valid_wot(path: str) -> bool:
+        import os
+        return bool(path) and os.path.isfile(os.path.join(path, "WorldOfTanks.exe"))
 
     # ── OBS Browser-Source automation ────────────────────────────────────────
 
