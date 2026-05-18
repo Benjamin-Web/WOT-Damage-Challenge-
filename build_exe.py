@@ -69,6 +69,8 @@ def build_installer() -> None:
         "--hidden-import", "webview",
         "--hidden-import", "webview.platforms.edgechromium",
         "--hidden-import", "installer.updater",
+        "--hidden-import", "installer.bridge",
+        "--hidden-import", "obsws_python",
         "--collect-data",  "customtkinter",
         "--collect-data",  "webview",
         "--collect-submodules", "webview",

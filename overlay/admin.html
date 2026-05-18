@@ -365,6 +365,11 @@
                     onclick="copyText(document.getElementById('overlay-url').textContent)"
                     data-i18n="common.copy">Kopieren</button>
           </div>
+          <button id="obs-add-btn" class="copy-btn"
+                  style="display:none; margin-top:10px; width:100%;
+                         padding:10px; font-size:13px;"
+                  onclick="addToObs()"
+                  data-i18n="admin.obs_add_btn">＋ In OBS hinzufuegen</button>
         </section>
 
         <section class="card">
@@ -809,6 +814,44 @@
       });
       toast(i18n.t('admin.toast.reset_done'));
       refresh();
+    }
+
+    function isPywebview() {
+      return !!(window.pywebview && window.pywebview.api &&
+                window.pywebview.api.add_obs_source);
+    }
+    function showObsButtonIfDesktop() {
+      const btn = document.getElementById('obs-add-btn');
+      if (!btn) return;
+      btn.style.display = isPywebview() ? '' : 'none';
+    }
+    // pywebview injects the API asynchronously after page load.
+    window.addEventListener('pywebviewready', showObsButtonIfDesktop);
+    setTimeout(showObsButtonIfDesktop, 500);
+    setTimeout(showObsButtonIfDesktop, 1500);
+
+    async function addToObs() {
+      if (!isPywebview()) return;
+      const url = (document.getElementById('overlay-url').textContent || '').trim();
+      if (!url || url === '—') {
+        toast(i18n.t('admin.toast.obs_no_url'));
+        return;
+      }
+      let result = await window.pywebview.api.add_obs_source(url);
+      if (!result.ok && result.needs_password) {
+        const pw = prompt(i18n.t('admin.obs_password_prompt'));
+        if (!pw) return;
+        result = await window.pywebview.api.add_obs_source(url, pw);
+      }
+      if (result.ok) {
+        toast(i18n.t(result.note === 'source_already_present'
+                       ? 'admin.toast.obs_existed'
+                       : 'admin.toast.obs_added'));
+      } else if (result.error === 'obs_not_reachable') {
+        toast(i18n.t('admin.toast.obs_unreachable'));
+      } else {
+        toast(i18n.t('admin.toast.obs_failed') + ' (' + (result.error || '') + ')');
+      }
     }
 
     async function addStreamer(teamId, inputEl) {

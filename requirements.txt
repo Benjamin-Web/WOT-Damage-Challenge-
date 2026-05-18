@@ -6,4 +6,5 @@
 customtkinter>=5.2
 Pillow>=10.0
 pywebview>=5.0
+obsws-python>=1.6
 pyinstaller>=6.0

@@ -1259,6 +1259,23 @@ def _open_admin_webview() -> None:
         log.warning("pywebview not installed; falling back to system browser")
         webbrowser.open(SERVER_URL + "/admin")
         return
+
+    # Wire up the JS-to-Python bridge so the dashboard can drive OBS, etc.
+    try:
+        from installer.bridge import WebviewBridge
+
+        def _get(key: str) -> str | None:
+            return _load_user_settings().get(key)
+
+        def _set(key: str, value: str) -> None:
+            data = _load_user_settings()
+            data[key] = value
+            _save_user_settings(data)
+
+        bridge = WebviewBridge(settings_get=_get, settings_set=_set)
+    except ImportError:
+        bridge = None
+
     try:
         webview.create_window(
             t("organizer.window_title"),
@@ -1266,6 +1283,7 @@ def _open_admin_webview() -> None:
             width=1280, height=820,
             min_size=(960, 640),
             background_color=BG,
+            js_api=bridge,
         )
         webview.start()
     except Exception as exc:
