@@ -535,7 +535,38 @@
       $('log').innerHTML = '';
     }
 
+    function captureInputState() {
+      const out = {};
+      document.querySelectorAll('.add-streamer-row input').forEach(function (el) {
+        const card = el.closest('.team-card');
+        if (!card) return;
+        const tid = card.getAttribute('data-team-id');
+        out[tid] = {
+          value: el.value,
+          focused: document.activeElement === el,
+          selStart: el.selectionStart,
+          selEnd: el.selectionEnd,
+        };
+      });
+      return out;
+    }
+    function restoreInputState(state) {
+      Object.keys(state).forEach(function (tid) {
+        const card = document.querySelector('.team-card[data-team-id="' + tid + '"]');
+        if (!card) return;
+        const el = card.querySelector('.add-streamer-row input');
+        if (!el) return;
+        const s = state[tid];
+        el.value = s.value;
+        if (s.focused) {
+          el.focus();
+          try { el.setSelectionRange(s.selStart, s.selEnd); } catch (e) {}
+        }
+      });
+    }
+
     function render(data) {
+      const inputState = captureInputState();
       const event = data.event;
       const modeLabel = event.mode === 'versus' ? 'Versus' : 'Coop';
       $('ev-name-top').textContent = event.name + ' · ' + modeLabel;
@@ -646,6 +677,8 @@
               '<span class="r">' + fmt(entry.remaining) + '</span>' +
             '</div>';
           }).join('');
+
+      restoreInputState(inputState);
     }
 
     function openWizard() {
