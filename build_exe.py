@@ -68,6 +68,7 @@ def build_installer() -> None:
         "--hidden-import", "PIL._tkinter_finder",
         "--hidden-import", "webview",
         "--hidden-import", "webview.platforms.edgechromium",
+        "--hidden-import", "installer.updater",
         "--collect-data",  "customtkinter",
         "--collect-data",  "webview",
         "--collect-submodules", "webview",

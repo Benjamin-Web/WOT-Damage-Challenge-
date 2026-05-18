@@ -69,8 +69,11 @@ FONT_FAM = "Inter"
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
+__version__ = "1.0.0"
+
 DEFAULT_SERVER_URL = "https://mohjos-damagerace.duckdns.org"
 SETTINGS_FILE = "damagerace_settings.json"
+GITHUB_REPO = "Benjamin-Web/WOT-Damage-Challenge-"
 
 
 def _resource_path(rel: str) -> str:
@@ -162,6 +165,15 @@ _MESSAGES: dict[str, dict[str, str]] = {
                                  "en": "Note: Your browser opens. After signing in with\nTwitch you are returned to this window automatically."},
     "login.timeout":            {"de": "Login-Timeout. Bitte erneut versuchen.",
                                  "en": "Login timed out. Please try again."},
+
+    "update.available_title":   {"de": "Update verfuegbar",
+                                 "en": "Update available"},
+    "update.available_body":    {"de": "Version {tag} ist verfuegbar (aktuell: {current}).\nJetzt installieren? Die App startet sich neu.",
+                                 "en": "Version {tag} is available (current: {current}).\nInstall now? The app will restart."},
+    "update.downloading":       {"de": "Update wird heruntergeladen…",
+                                 "en": "Downloading update…"},
+    "update.download_failed":   {"de": "Update fehlgeschlagen. Bitte spaeter erneut versuchen.",
+                                 "en": "Update failed. Please try again later."},
 
     "organizer.window_title":   {"de": "DamageRace · Veranstalter",
                                  "en": "DamageRace · Organizer"},
@@ -466,8 +478,10 @@ class App(ctk.CTk):
         self._wot_path = ""
         self._wizard_teams: list[dict[str, str]] = []
         self._wizard_mode = "coop"
+        self._pending_update: dict[str, str] | None = None
         self._center()
         self.show_welcome()
+        self._start_update_check()
 
     def _center(self) -> None:
         self.update_idletasks()
@@ -539,6 +553,43 @@ class App(ctk.CTk):
                          text_color=GRAY).pack(anchor="w")
 
         self._make_lang_toggle(row).pack(side="right")
+
+    # ── Update check ──────────────────────────────────────────────────────────
+
+    def _start_update_check(self) -> None:
+        try:
+            from installer import updater
+        except ImportError:
+            return
+
+        def _on_update_available(info: dict[str, str]) -> None:
+            # Bounce onto the Tk thread.
+            self.after(0, lambda: self._prompt_update(info))
+
+        updater.check_in_background(GITHUB_REPO, __version__, _on_update_available)
+
+    def _prompt_update(self, info: dict[str, str]) -> None:
+        self._pending_update = info
+        from tkinter import messagebox
+        answer = messagebox.askyesno(
+            t("update.available_title"),
+            t("update.available_body", tag=info["tag"], current=__version__),
+        )
+        if not answer:
+            return
+        from installer import updater
+        if not updater.apply_update(info["download_url"]):
+            messagebox.showerror(
+                t("update.available_title"),
+                t("update.download_failed"),
+            )
+            return
+        # apply_update spawned the replacement process; exit cleanly.
+        try:
+            self.destroy()
+        except Exception:
+            pass
+        os._exit(0)
 
     def _copy(self, text_value: str | None) -> None:
         if not text_value:
@@ -1223,6 +1274,11 @@ def _open_admin_webview() -> None:
 
 
 if __name__ == "__main__":
+    try:
+        from installer.updater import handle_replace_flag
+        handle_replace_flag()
+    except ImportError:
+        pass
     app = App()
     app.mainloop()
     if getattr(app, "launch_admin_webview", False):
