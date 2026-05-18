@@ -1285,7 +1285,21 @@ def _open_admin_webview() -> None:
             background_color=BG,
             js_api=bridge,
         )
-        webview.start()
+        # Persist cookies + localStorage between launches so the Twitch
+        # session cookie survives an app restart. Without an explicit
+        # storage_path pywebview uses a fresh ephemeral profile each time.
+        storage_dir = os.path.join(
+            os.environ.get("APPDATA") or os.path.expanduser("~"),
+            "MohjosDamageRace", "webview-data",
+        )
+        try:
+            os.makedirs(storage_dir, exist_ok=True)
+        except OSError:
+            storage_dir = None
+        start_kwargs = {"private_mode": False}
+        if storage_dir:
+            start_kwargs["storage_path"] = storage_dir
+        webview.start(**start_kwargs)
     except Exception as exc:
         log.exception("pywebview failed (%s); falling back to system browser", exc)
         webbrowser.open(SERVER_URL + "/admin")
