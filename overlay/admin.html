@@ -147,6 +147,18 @@
       cursor: pointer;
     }
     .add-streamer-row button:hover { background: rgba(255, 215, 0, 0.22); }
+    .add-streamer-row .self-join-btn {
+      padding: 6px 10px;
+      background: var(--md3-surface-container-high);
+      color: var(--text-primary);
+      border: 1px solid var(--md3-outline);
+      font-size: 12px; font-weight: 600;
+      white-space: nowrap;
+    }
+    .add-streamer-row .self-join-btn:hover {
+      background: rgba(255, 215, 0, 0.14);
+      border-color: var(--md3-primary);
+    }
 
     .invite-row {
       display: flex; align-items: center; gap: 8px;
@@ -698,6 +710,9 @@
               '<input type="text" placeholder="' + i18n.t('admin.team.add_streamer_ph') + '"' +
                 ' onkeydown="if(event.key===\'Enter\') addStreamer(' + team.id + ', this)">' +
               '<button onclick="addStreamer(' + team.id + ', this.previousElementSibling)">＋</button>' +
+              '<button class="self-join-btn" onclick="joinSelf(' + team.id + ')" ' +
+                      'title="' + i18n.t('admin.team.join_self_title') + '">' +
+                       i18n.t('admin.team.join_self') + '</button>' +
             '</div>' +
             '<div class="invite-row">' +
               '<span class="url">' + (team.invite_url || '—') + '</span>' +
@@ -933,6 +948,32 @@
       }
     }
 
+    function getOrAskOwnWotName() {
+      let name = localStorage.getItem('organizer_wot_name') || '';
+      if (!name) {
+        name = (prompt(i18n.t('admin.team.join_self_prompt')) || '').trim();
+        if (!name) return null;
+        localStorage.setItem('organizer_wot_name', name);
+      }
+      return name;
+    }
+
+    async function joinSelf(teamId) {
+      const wotName = getOrAskOwnWotName();
+      if (!wotName) return;
+      const data = await fetchJson('/api/event/streamer/add', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ team_id: teamId, wot_name: wotName }),
+      });
+      if (data.ok) {
+        toast(i18n.t('admin.toast.joined_self'));
+        refresh();
+      } else {
+        toast(data.error || 'error');
+      }
+    }
+
     async function addStreamer(teamId, inputEl) {
       const wotName = (inputEl.value || '').trim();
       if (!wotName) return;
@@ -1028,7 +1069,7 @@
       openWizard, closeWizard, selectMode, cycleColor, addTeamRow,
       removeTeam, wizardSubmit, setGoal, togglePause, resetEvent,
       regenerate, copyText,
-      addStreamer, removeStreamer,
+      addStreamer, removeStreamer, joinSelf,
       onChipDragStart, onChipDragEnd,
       onTeamDragOver, onTeamDragLeave, onTeamDrop,
       saveDiscordWebhook, testDiscord, finishEvent, addToObs,
