@@ -1,72 +1,88 @@
-"""
-build_exe.py — Baut DamageRace-Install.exe mit PyInstaller.
+"""Bundle the DamageRace desktop client into a single-file Windows executable.
 
-Voraussetzungen:
-    pip install pyinstaller flask flask-cors customtkinter
+Prerequisites (install once into your Python 3.x environment):
 
-Aufruf:
+    pip install pyinstaller customtkinter
+
+Usage:
+
     python build_exe.py
 
-Ergebnis: dist/DamageRace-Install.exe
+The resulting binary is written to ``dist/DamageRace.exe``.
 """
+from __future__ import annotations
 
 import os
-import sys
 import shutil
 import subprocess
+import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
+EXE_NAME = "DamageRace"
+SPEC_FILE = f"{EXE_NAME}.spec"
 
 
-def run(cmd):
+def run(cmd: list[str]) -> None:
     print("\n>>> " + " ".join(cmd))
-    r = subprocess.run(cmd, cwd=ROOT)
-    if r.returncode != 0:
-        print("FEHLER! Build abgebrochen.")
-        sys.exit(r.returncode)
+    result = subprocess.run(cmd, cwd=ROOT)
+    if result.returncode != 0:
+        print(f"ERROR: build failed with exit code {result.returncode}.")
+        sys.exit(result.returncode)
 
 
-def clean():
-    for d in ["build", "__pycache__"]:
-        p = os.path.join(ROOT, d)
-        if os.path.isdir(p):
-            shutil.rmtree(p)
-    for spec in ["DamageRace-Install.spec"]:
-        p = os.path.join(ROOT, spec)
-        if os.path.isfile(p):
-            os.remove(p)
+def clean_artifacts() -> None:
+    for directory in ("build", "__pycache__"):
+        path = os.path.join(ROOT, directory)
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+    spec_path = os.path.join(ROOT, SPEC_FILE)
+    if os.path.isfile(spec_path):
+        os.remove(spec_path)
 
 
-def build_installer():
+def ensure_wotmod() -> None:
     wotmod = os.path.join(ROOT, "dist", "mohjos_damagerace.wotmod")
-    if not os.path.isfile(wotmod):
-        print("WARNUNG: dist/mohjos_damagerace.wotmod fehlt.")
-        print("         Zuerst ausfuehren: python2.7 mod/build_wotmod.py")
-        os.makedirs(os.path.join(ROOT, "dist"), exist_ok=True)
-        open(wotmod, "wb").close()
+    if os.path.isfile(wotmod):
+        return
+    print("WARNING: dist/mohjos_damagerace.wotmod missing.")
+    print("         Run first: C:\\Python27\\python.exe mod\\build_wotmod.py")
+    os.makedirs(os.path.dirname(wotmod), exist_ok=True)
+    # Embed an empty placeholder so PyInstaller doesn't fail; participants will
+    # see a clear install error if the binary ever ships without the mod.
+    open(wotmod, "wb").close()
 
+
+def build_installer() -> None:
     sep = os.pathsep
-
     run([
         sys.executable, "-m", "PyInstaller",
         "--onefile",
         "--windowed",
-        "--name",      "DamageRace-Install",
-        "--add-data",  f"installer_config.json{sep}.",
-        "--add-data",  f"dist/mohjos_damagerace.wotmod{sep}dist",
+        "--noconfirm",
+        "--clean",
+        "--name",          EXE_NAME,
+        "--add-data",      f"installer_config.json{sep}.",
+        "--add-data",      f"dist/mohjos_damagerace.wotmod{sep}dist",
         "--hidden-import", "customtkinter",
         "--hidden-import", "PIL",
         "--hidden-import", "PIL._tkinter_finder",
+        "--hidden-import", "webview",
+        "--hidden-import", "webview.platforms.edgechromium",
         "--collect-data",  "customtkinter",
+        "--collect-data",  "webview",
+        "--collect-submodules", "webview",
         "installer_gui.py",
     ])
 
 
-if __name__ == "__main__":
-    print("=== Mohjos DamageRace — Installer Build ===")
-    clean()
-    os.makedirs(os.path.join(ROOT, "dist"), exist_ok=True)
+def main() -> None:
+    print("=== Mohjos DamageRace — desktop client build ===")
+    clean_artifacts()
+    ensure_wotmod()
     build_installer()
-    clean()
-    print("\n=== FERTIG ===")
-    print("dist/DamageRace-Install.exe  <- an Streamer verteilen")
+    clean_artifacts()
+    print(f"\n=== Done ===\ndist/{EXE_NAME}.exe  <- distribute to streamers")
+
+
+if __name__ == "__main__":
+    main()

@@ -163,6 +163,11 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "login.timeout":            {"de": "Login-Timeout. Bitte erneut versuchen.",
                                  "en": "Login timed out. Please try again."},
 
+    "organizer.window_title":   {"de": "DamageRace · Veranstalter",
+                                 "en": "DamageRace · Organizer"},
+    "organizer.webview_missing":{"de": "WebView2 fehlt. Bitte die Microsoft Edge WebView2 Runtime\ninstallieren (Suche: 'WebView2 Evergreen Standalone').\nFallback: Admin-Dashboard wird im Standard-Browser geoeffnet.",
+                                 "en": "WebView2 runtime is missing. Please install the Microsoft\nEdge WebView2 Runtime ('WebView2 Evergreen Standalone').\nFalling back to the system browser."},
+
     "dash.title":               {"de": "Dein Event", "en": "Your event"},
     "dash.logged_in_as":        {"de": "Eingeloggt als {name}",
                                  "en": "Signed in as {name}"},
@@ -653,33 +658,26 @@ class App(ctk.CTk):
                 pass
         return outer
 
-    # ── Organizer login ───────────────────────────────────────────────────────
+    # ── Organizer entry (embedded admin dashboard) ────────────────────────────
 
     def show_organizer_login(self) -> None:
-        self._active_screen = self.show_organizer_login
-        self._clear()
-        self._topbar(self, t("login.title"), t("login.subtitle"),
-                     back=self.show_welcome)
+        """Launch the embedded admin dashboard.
 
-        body = ctk.CTkFrame(self, fg_color="transparent")
-        body.pack(fill="both", expand=True, padx=40, pady=40)
-
-        ctk.CTkButton(body, text=t("login.button"),
-                      font=ctk.CTkFont(FONT_FAM, 15, "bold"),
-                      height=52, fg_color=TWITCH, hover_color=TWITCH2,
-                      text_color="#fff", corner_radius=8,
-                      command=self._start_twitch_login).pack(fill="x")
-
-        self._status_label = ctk.CTkLabel(
-            body, text="", font=ctk.CTkFont(FONT_FAM, 12),
-            text_color=GRAY, wraplength=420, justify="left",
-        )
-        self._status_label.pack(anchor="w", pady=(20, 0))
-
-        ctk.CTkLabel(body, text=t("login.afterhint"),
-                     font=ctk.CTkFont(FONT_FAM, 11),
-                     text_color=DIM, justify="left"
-                     ).pack(anchor="w", pady=(28, 0))
+        The whole organizer flow (Twitch OAuth + event management) now lives
+        in the web admin UI loaded inside a pywebview window — no separate
+        browser, no CTk dashboard. The old `show_organizer_dashboard` code
+        is kept below for now in case we need to fall back to it; nothing
+        calls it anymore.
+        """
+        # Set a flag that the bootstrap at the bottom of the file picks up
+        # after Tk's mainloop exits. pywebview must own the main thread, so
+        # we tear down Tk first and start the WebView from a clean context.
+        self.launch_admin_webview = True
+        try:
+            self.withdraw()
+        except Exception:
+            pass
+        self.quit()
 
     def _start_twitch_login(self) -> None:
         self._status_label.configure(text=t("login.browser_hint"), text_color=GRAY)
@@ -1202,5 +1200,34 @@ class App(ctk.CTk):
             self.p_status.configure(text="✕  " + message, text_color=RED)
 
 
+def _open_admin_webview() -> None:
+    """Run the embedded admin dashboard. Blocks on the main thread."""
+    try:
+        import webview
+    except ImportError:
+        log.warning("pywebview not installed; falling back to system browser")
+        webbrowser.open(SERVER_URL + "/admin")
+        return
+    try:
+        webview.create_window(
+            t("organizer.window_title"),
+            SERVER_URL + "/admin",
+            width=1280, height=820,
+            min_size=(960, 640),
+            background_color=BG,
+        )
+        webview.start()
+    except Exception as exc:
+        log.exception("pywebview failed (%s); falling back to system browser", exc)
+        webbrowser.open(SERVER_URL + "/admin")
+
+
 if __name__ == "__main__":
-    App().mainloop()
+    app = App()
+    app.mainloop()
+    if getattr(app, "launch_admin_webview", False):
+        try:
+            app.destroy()
+        except Exception:
+            pass
+        _open_admin_webview()
