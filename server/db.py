@@ -663,6 +663,7 @@ class Database:
         streamers_map: dict[str, dict] = {}
         for streamer in streamers:
             streamers_map[streamer["wot_name"]] = {
+                "token":     streamer["token"],
                 "team_id":   streamer["team_id"],
                 "damage":    int(streamer["damage"]),
                 "last_seen": streamer["last_seen"],

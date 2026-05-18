@@ -439,6 +439,49 @@
     </div>
   </div>
 
+  <div class="modal-bg" id="token-modal">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-title" data-i18n="admin.token.title">Streamer-Token</div>
+        <button class="close-x" onclick="closeTokenModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:13px; color:var(--text-muted); margin-bottom:14px;"
+             data-i18n="admin.token.hint">
+          Dieser Token gehoert in die <code>config.json</code> des WoT-Mods.
+          Pfad: <code>res_mods/&lt;version&gt;/mods/damagerace/config.json</code>.
+        </div>
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:4px;"
+             data-i18n="admin.token.label_name">WoT-Name</div>
+        <div id="token-modal-name"
+             style="font-size:14px; font-weight:700; color:var(--text-primary);
+                    margin-bottom:14px;">—</div>
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:4px;"
+             data-i18n="admin.token.label_token">Streamer-Token</div>
+        <div class="invite-row" style="margin-bottom:14px;">
+          <span class="url" id="token-modal-token">—</span>
+          <button class="copy-btn"
+                  onclick="copyText(document.getElementById('token-modal-token').textContent)"
+                  data-i18n="common.copy">Kopieren</button>
+        </div>
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:4px;"
+             data-i18n="admin.token.label_config">Fertige config.json</div>
+        <pre id="token-modal-config"
+             style="background:var(--md3-surface-dim);
+                    border:1px solid var(--md3-outline);
+                    border-radius:var(--r-sm);
+                    padding:10px; font-size:11px;
+                    font-family:'JetBrains Mono', monospace;
+                    color:var(--text-primary); margin:0; white-space:pre-wrap;
+                    word-break:break-all;"></pre>
+        <button class="copy-btn"
+                style="margin-top:10px; width:100%; padding:10px; font-size:13px;"
+                onclick="copyText(document.getElementById('token-modal-config').textContent)"
+                data-i18n="admin.token.copy_config">Komplette config.json kopieren</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-bg" id="wizard">
     <div class="modal">
       <div class="modal-head">
@@ -673,12 +716,14 @@
             return '<span class="member-chip" draggable="true"' +
                        ' data-wot-name="' + safeName + '"' +
                        ' ondragstart="onChipDragStart(event)"' +
-                       ' ondragend="onChipDragEnd(event)">' +
+                       ' ondragend="onChipDragEnd(event)"' +
+                       ' onclick="showStreamerToken(\'' + name.replace(/'/g, "\\'") + '\')"' +
+                       ' title="' + i18n.t('admin.team.chip_title') + '">' +
                      '<span class="live-dot' + (live ? '' : ' off') + '"></span>' +
                      safeName +
                      '<span class="dmg">' + fmt(sInfo.damage || 0) + '</span>' +
                      '<span class="chip-x" title="' + i18n.t('admin.team.remove_streamer') + '"' +
-                       ' onclick="removeStreamer(\'' + name.replace(/'/g, "\\'") + '\')">×</span>' +
+                       ' onclick="event.stopPropagation(); removeStreamer(\'' + name.replace(/'/g, "\\'") + '\')">×</span>' +
                    '</span>';
           }).join('') ||
           '<span style="color:var(--text-dim); font-size:12px;">' +
@@ -969,9 +1014,38 @@
       if (data.ok) {
         toast(i18n.t('admin.toast.joined_self'));
         refresh();
+        const token = data.streamer && data.streamer.streamer_token;
+        if (token) openTokenModal(wotName, token);
       } else {
         toast(data.error || 'error');
       }
+    }
+
+    function openTokenModal(wotName, token) {
+      document.getElementById('token-modal-name').textContent = wotName;
+      document.getElementById('token-modal-token').textContent = token;
+      const cfg = {
+        server_url: location.origin,
+        streamer_token: token,
+        streamer_name: wotName,
+        enabled: true,
+        send_interval_ms: 200,
+        allowed_arena_types: [1, 7]
+      };
+      document.getElementById('token-modal-config').textContent =
+        JSON.stringify(cfg, null, 2);
+      document.getElementById('token-modal').classList.add('open');
+    }
+    function closeTokenModal() {
+      document.getElementById('token-modal').classList.remove('open');
+    }
+    function showStreamerToken(wotName) {
+      const info = (latest && latest.streamers && latest.streamers[wotName]) || null;
+      if (!info || !info.token) {
+        toast(i18n.t('admin.token.missing'));
+        return;
+      }
+      openTokenModal(wotName, info.token);
     }
 
     async function addStreamer(teamId, inputEl) {
@@ -1070,6 +1144,7 @@
       removeTeam, wizardSubmit, setGoal, togglePause, resetEvent,
       regenerate, copyText,
       addStreamer, removeStreamer, joinSelf,
+      showStreamerToken, openTokenModal, closeTokenModal,
       onChipDragStart, onChipDragEnd,
       onTeamDragOver, onTeamDragLeave, onTeamDrop,
       saveDiscordWebhook, testDiscord, finishEvent, addToObs,
