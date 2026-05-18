@@ -246,7 +246,7 @@ def _implicit_bridge_page(sid: str) -> str:
         "document.body.innerHTML=d.ok"
         "?'<h2 style=\"color:#00e676;\">Login complete.</h2>'"
         ":'<h2 style=\"color:#cf6679;\">Error: '+d.error+'</h2>';"
-        "if(d.ok)setTimeout(()=>window.close(),1500);})();</script></body>"
+        "if(d.ok)setTimeout(()=>{location.href='/admin'},800);})();</script></body>"
     )
 
 
@@ -257,7 +257,7 @@ def _auth_done_page(msg: str, ok: bool = True) -> str:
         f'<body style="background:#0d0d14;color:#f3f4f6;font-family:Inter,system-ui;'
         f'text-align:center;padding:80px;">'
         f'<h2 style="color:{color};">{msg}</h2>'
-        f'<script>setTimeout(()=>{{try{{window.close()}}catch(_){{}}}},1500);'
+        f'<script>setTimeout(()=>{{location.href="/admin"}},1500);'
         f'</script></body>'
     )
 
