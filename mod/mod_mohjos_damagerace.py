@@ -20,6 +20,8 @@ import json
 import os
 import sys
 import tempfile
+import threading
+import urllib2
 import uuid
 
 try:
@@ -215,36 +217,35 @@ def _do_send():
         _log_error('payload build failed: %s' % exc)
         return
 
-    def _on_response(data):
-        _file_log('TRACE', 'fetchURL response type=%s preview=%r'
-                  % (type(data).__name__, str(data)[:200]))
-        if data is None or data == '':
-            _log_warning('HTTP POST failed; retrying %d damage in 5s.' % damage)
-            _pending_damage[0] += damage
+    def _worker():
+        try:
+            req = urllib2.Request(
+                url,
+                data=payload,
+                headers={'Content-Type': 'application/json'},
+            )
+            resp = urllib2.urlopen(req, timeout=5)
+            body = resp.read()
+            _file_log('TRACE', 'urllib2 status=%s body=%r'
+                      % (resp.getcode(), body[:200]))
+            _log_info('Posted damage=%d' % damage)
+        except Exception as exc:
+            _file_log('ERROR', 'urllib2 POST failed: %s' % exc)
+            # Re-queue on the main thread.
+            def _requeue():
+                _pending_damage[0] += damage
+                try:
+                    BigWorld.callback(5.0, _do_send)
+                except Exception:
+                    pass
             try:
-                BigWorld.callback(5.0, _do_send)
+                BigWorld.callback(0.0, _requeue)
             except Exception:
                 pass
-        else:
-            _log_info('Posted damage=%d' % damage)
 
-    try:
-        BigWorld.fetchURL(url, _on_response, payload,
-                          {'Content-Type': 'application/json'}, 'POST')
-    except TypeError:
-        try:
-            BigWorld.fetchURL(url, _on_response, payload,
-                              'Content-Type: application/json\r\n', 'POST')
-        except Exception:
-            get_url = '%s?streamer_token=%s&damage=%d&key=%s' % (
-                url, token, damage, key,
-            )
-            try:
-                BigWorld.fetchURL(get_url, _on_response)
-            except Exception as exc:
-                _log_error('fetchURL failed entirely: %s' % exc)
-    except Exception as exc:
-        _log_error('fetchURL crashed: %s' % exc)
+    t = threading.Thread(target=_worker)
+    t.daemon = True
+    t.start()
 
 
 # ---------------------------------------------------------------------------
