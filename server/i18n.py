@@ -64,6 +64,13 @@ _MESSAGES: dict[str, dict[str, str]] = {
                                 "en": "Team does not belong to this event."},
     "roster.streamer_unknown": {"de": "Streamer nicht im Event gefunden.",
                                 "en": "Streamer not found in this event."},
+
+    "integrations.discord_invalid":         {"de": "Discord-Webhook-URL ist ungueltig.",
+                                              "en": "Discord webhook URL is invalid."},
+    "integrations.discord_not_configured":  {"de": "Kein Discord-Webhook hinterlegt.",
+                                              "en": "No Discord webhook configured."},
+    "integrations.discord_post_failed":     {"de": "Discord-Post fehlgeschlagen: {detail}",
+                                              "en": "Discord post failed: {detail}"},
 }
 
 

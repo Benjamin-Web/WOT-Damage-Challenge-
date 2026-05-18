@@ -25,6 +25,7 @@ from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 import config as cfg
+import discord_recap
 import i18n
 import twitch_oauth
 from db import MAX_TEAMS, MIN_TEAMS, Database
@@ -509,6 +510,70 @@ def api_streamer_remove():
         return _error(err_key, status=404)
     return jsonify({"ok": True,
                     **db.get_event_state(event["id"], base_url=_base_url())})
+
+
+# ── Integrations: Discord webhook ─────────────────────────────────────────────
+
+def _post_recap(event_id: int, webhook_url: str,
+                kind: str = "final") -> tuple[bool, str | None]:
+    state = db.get_event_state(event_id, base_url=_base_url())
+    if not state:
+        return False, "event_missing"
+    top = db.get_top_streamers(event_id, limit=3)
+    embed = discord_recap.build_recap_embed(state, top, kind=kind)
+    return discord_recap.post_webhook(webhook_url, embed)
+
+
+@app.route("/api/event/integrations/discord", methods=["POST"])
+@_route_safe
+def api_integrations_discord_set():
+    event, err = _owner_event()
+    if err:
+        return err
+    data = _read_json()
+    raw = (data.get("webhook_url") or "").strip()
+    if raw and not discord_recap.is_valid_webhook(raw):
+        return _error("integrations.discord_invalid")
+    db.set_discord_webhook(event["id"], raw or None)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/event/integrations/discord/test", methods=["POST"])
+@_route_safe
+def api_integrations_discord_test():
+    event, err = _owner_event()
+    if err:
+        return err
+    row = db.get_event_row(event["id"]) or {}
+    url = row.get("discord_webhook")
+    if not url:
+        return _error("integrations.discord_not_configured")
+    ok, reason = _post_recap(event["id"], url, kind="test")
+    if not ok:
+        return _error("integrations.discord_post_failed",
+                      detail=str(reason or ""))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/event/finish", methods=["POST"])
+@_route_safe
+def api_event_finish():
+    event, err = _owner_event()
+    if err:
+        return err
+    row = db.get_event_row(event["id"]) or {}
+    if row.get("recap_posted_at"):
+        return jsonify({"ok": True, "already_posted": True,
+                        "recap_posted_at": row["recap_posted_at"]})
+    url = row.get("discord_webhook")
+    if url:
+        ok, reason = _post_recap(event["id"], url, kind="final")
+        if not ok:
+            return _error("integrations.discord_post_failed",
+                          detail=str(reason or ""))
+    db.mark_recap_posted(event["id"])
+    db.set_event_paused(event["id"], True)
+    return jsonify({"ok": True})
 
 
 # ── Public invite + join ──────────────────────────────────────────────────────

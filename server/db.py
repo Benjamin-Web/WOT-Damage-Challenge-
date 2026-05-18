@@ -149,6 +149,16 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
             """)
 
+            # Additive migrations — wrap in try/except so reruns are idempotent.
+            for ddl in (
+                "ALTER TABLE events ADD COLUMN discord_webhook TEXT",
+                "ALTER TABLE events ADD COLUMN recap_posted_at TEXT",
+            ):
+                try:
+                    c.execute(ddl)
+                except sqlite3.OperationalError:
+                    pass
+
     # ── Users ─────────────────────────────────────────────────────────────────
 
     def upsert_user(self, twitch_id: str, twitch_login: str,
@@ -441,6 +451,34 @@ class Database:
                 "team":  dict(team) if team else None,
             }, None
 
+    # ── Integrations (Discord webhook) ────────────────────────────────────────
+
+    def set_discord_webhook(self, event_id: int, webhook_url: str | None) -> None:
+        with self._lock, self._conn() as c:
+            c.execute("UPDATE events SET discord_webhook = ? WHERE id = ?",
+                      (webhook_url, event_id))
+
+    def mark_recap_posted(self, event_id: int) -> None:
+        with self._lock, self._conn() as c:
+            c.execute("UPDATE events SET recap_posted_at = ? WHERE id = ?",
+                      (_now_iso(), event_id))
+
+    def get_event_row(self, event_id: int) -> dict | None:
+        with self._lock, self._conn() as c:
+            row = c.execute("SELECT * FROM events WHERE id = ?",
+                            (event_id,)).fetchone()
+            return dict(row) if row else None
+
+    def get_top_streamers(self, event_id: int, limit: int = 3) -> list[dict]:
+        with self._lock, self._conn() as c:
+            rows = c.execute(
+                "SELECT wot_name, damage, team_id FROM streamers "
+                "WHERE event_id = ? AND damage > 0 "
+                "ORDER BY damage DESC LIMIT ?",
+                (event_id, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
     # ── Owner-managed roster ──────────────────────────────────────────────────
 
     def add_streamer(self, event_id: int, team_id: int | None,
@@ -651,6 +689,8 @@ class Database:
                 "invite_url":   f"{base}/join/{event['event_invite_token']}" if base else None,
                 "overlay_url":  f"{base}/overlay/{event['slug']}" if base else None,
                 "owner":        dict(owner) if owner else None,
+                "discord_webhook":   event["discord_webhook"] if "discord_webhook" in event.keys() else None,
+                "recap_posted_at":   event["recap_posted_at"] if "recap_posted_at" in event.keys() else None,
             },
             "teams":     teams_out,
             "streamers": streamers_map,

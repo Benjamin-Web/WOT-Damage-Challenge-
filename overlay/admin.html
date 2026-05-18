@@ -373,6 +373,36 @@
         </section>
 
         <section class="card">
+          <h2 class="card-title" data-i18n="admin.integrations">Integrationen</h2>
+          <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;"
+               data-i18n="admin.integrations_hint">
+            Discord-Webhook fuer Event-Recap. Beim Beenden des Events wird ein
+            zusammenfassender Embed mit Gewinner-Team, Top-Streamern und
+            Team-Standings in den Kanal gepostet.
+          </div>
+          <div style="display:flex; gap:6px; margin-bottom:8px;">
+            <input id="discord-webhook-input" type="text"
+                   placeholder="https://discord.com/api/webhooks/…"
+                   style="flex:1; background:var(--md3-surface-dim);
+                          border:1px solid var(--md3-outline);
+                          border-radius:var(--r-xs);
+                          padding:8px 10px; color:var(--text-primary);
+                          font-size:12px;
+                          font-family:'JetBrains Mono', monospace;">
+            <button class="copy-btn" onclick="saveDiscordWebhook()"
+                    data-i18n="common.save">Speichern</button>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="copy-btn" style="flex:1;" onclick="testDiscord()"
+                    data-i18n="admin.integrations.test">Test-Post</button>
+            <button class="copy-btn" style="flex:1;" onclick="finishEvent()"
+                    data-i18n="admin.integrations.finish">🏁 Event beenden</button>
+          </div>
+          <div id="recap-status" style="font-size:11px; color:var(--text-dim);
+                                        margin-top:8px;"></div>
+        </section>
+
+        <section class="card">
           <h2 class="card-title" data-i18n="admin.howto">Anleitung</h2>
           <div style="font-size:12px; color:var(--text-muted); line-height:1.7;">
             <p style="margin-bottom:6px;">
@@ -576,6 +606,18 @@
       const modeLabel = event.mode === 'versus' ? 'Versus' : 'Coop';
       $('ev-name-top').textContent = event.name + ' · ' + modeLabel;
       $('overlay-url').textContent = event.overlay_url || '—';
+
+      const dInput = document.getElementById('discord-webhook-input');
+      if (dInput && document.activeElement !== dInput) {
+        dInput.value = event.discord_webhook || '';
+      }
+      const recapStatus = document.getElementById('recap-status');
+      if (recapStatus) {
+        recapStatus.textContent = event.recap_posted_at
+          ? i18n.t('admin.recap_posted_at')
+              .replace('{ts}', new Date(event.recap_posted_at).toLocaleString())
+          : '';
+      }
       $('s-rest').textContent  = fmt(event.remaining);
       $('s-dealt').textContent = fmt(event.total_dealt);
       $('s-goal').textContent  = fmt(event.goal);
@@ -854,6 +896,43 @@
       }
     }
 
+    async function saveDiscordWebhook() {
+      const input = document.getElementById('discord-webhook-input');
+      const url = (input.value || '').trim();
+      const data = await fetchJson('/api/event/integrations/discord', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ webhook_url: url }),
+      });
+      if (data.ok) {
+        toast(url ? i18n.t('admin.toast.discord_saved')
+                  : i18n.t('admin.toast.discord_cleared'));
+      } else {
+        toast(data.error || 'error');
+      }
+    }
+    async function testDiscord() {
+      const data = await fetchJson('/api/event/integrations/discord/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      });
+      toast(data.ok ? i18n.t('admin.toast.discord_test_sent')
+                    : (data.error || 'error'));
+    }
+    async function finishEvent() {
+      if (!confirm(i18n.t('admin.confirm.finish_event'))) return;
+      const data = await fetchJson('/api/event/finish', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      });
+      if (data.ok) {
+        toast(data.already_posted
+              ? i18n.t('admin.toast.recap_already_posted')
+              : i18n.t('admin.toast.event_finished'));
+        refresh();
+      } else {
+        toast(data.error || 'error');
+      }
+    }
+
     async function addStreamer(teamId, inputEl) {
       const wotName = (inputEl.value || '').trim();
       if (!wotName) return;
@@ -952,6 +1031,7 @@
       addStreamer, removeStreamer,
       onChipDragStart, onChipDragEnd,
       onTeamDragOver, onTeamDragLeave, onTeamDrop,
+      saveDiscordWebhook, testDiscord, finishEvent, addToObs,
     });
     window.wizardTeams = wizardTeams;
 
