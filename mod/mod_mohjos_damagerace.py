@@ -37,6 +37,17 @@ except Exception:
     _VehicleClass = None
 
 try:
+    from helpers import dependency as _dependency
+    from skeletons.gui.battle_session import IBattleSessionProvider \
+        as _IBattleSessionProvider
+    from gui.battle_control.battle_constants import FEEDBACK_EVENT_ID \
+        as _FEEDBACK_EVENT_ID
+except Exception:
+    _dependency = None
+    _IBattleSessionProvider = None
+    _FEEDBACK_EVENT_ID = None
+
+try:
     _INT_TYPES = (int, long)  # noqa: F821 (long only exists on Py2)
 except NameError:
     _INT_TYPES = (int,)
@@ -156,8 +167,11 @@ _cfg = _load_config()
 
 _in_battle = [False]
 _last_shot_target_id = [None]
+_outstanding_shots = {}  # vehicle_id -> count of our shots awaiting an HP drop
 _vehicle_hp_cache = {}
 _pending_damage = [0]
+_assist_damage = [0]
+_feedback_subscribed = [False]
 _send_timer = [None]
 
 
@@ -249,6 +263,77 @@ def _do_send():
 
 
 # ---------------------------------------------------------------------------
+# Battle feedback (assist damage).
+
+_ASSIST_EVENT_NAMES = (
+    'PLAYER_ASSIST_TO_KILL_ENEMY',  # combined spot+track damage credit
+    'PLAYER_SPOTTED_ENEMY',
+    'PLAYER_USED_ARMOR',  # not assist, kept out of set below
+)
+
+_ASSIST_EVENT_IDS = set()
+if _FEEDBACK_EVENT_ID is not None:
+    for _name in ('PLAYER_ASSIST_TO_KILL_ENEMY',):
+        try:
+            _ASSIST_EVENT_IDS.add(getattr(_FEEDBACK_EVENT_ID, _name))
+        except Exception:
+            pass
+
+
+def _on_player_feedback(events):
+    if not _in_battle[0] or not _ASSIST_EVENT_IDS:
+        return
+    try:
+        for ev in events:
+            try:
+                ev_type = ev.getType()
+            except Exception:
+                continue
+            if ev_type not in _ASSIST_EVENT_IDS:
+                continue
+            damage = 0
+            try:
+                extra = ev.getExtra()
+                if extra is not None and hasattr(extra, 'getDamage'):
+                    damage = int(extra.getDamage() or 0)
+            except Exception:
+                damage = 0
+            if damage > 0:
+                _assist_damage[0] += damage
+                _file_log('INFO', 'Assist damage += %d (total=%d)'
+                          % (damage, _assist_damage[0]))
+    except Exception as exc:
+        _log_warning('feedback handler error: %s' % exc)
+
+
+def _subscribe_feedback():
+    if _feedback_subscribed[0]:
+        return
+    if _dependency is None or _IBattleSessionProvider is None:
+        return
+    try:
+        sp = _dependency.instance(_IBattleSessionProvider)
+        feedback = sp.shared.feedback
+        feedback.onPlayerFeedbackReceived += _on_player_feedback
+        _feedback_subscribed[0] = True
+        _log_info('Subscribed to PlayerFeedback (assist damage).')
+    except Exception as exc:
+        _log_warning('feedback subscribe failed: %s' % exc)
+
+
+def _unsubscribe_feedback():
+    if not _feedback_subscribed[0]:
+        return
+    try:
+        sp = _dependency.instance(_IBattleSessionProvider)
+        feedback = sp.shared.feedback
+        feedback.onPlayerFeedbackReceived -= _on_player_feedback
+    except Exception as exc:
+        _log_warning('feedback unsubscribe failed: %s' % exc)
+    _feedback_subscribed[0] = False
+
+
+# ---------------------------------------------------------------------------
 # Hook installation.
 
 _ARENA_PERIOD_BATTLE = 3
@@ -323,7 +408,10 @@ def _install_player_avatar_hooks():
                 target_id = _extract_shot_target(args)
                 if target_id is not None:
                     _last_shot_target_id[0] = target_id
-                    _file_log('INFO', 'Shot landed on target=%s' % target_id)
+                    _outstanding_shots[target_id] = (
+                        _outstanding_shots.get(target_id, 0) + 1)
+                    _file_log('INFO', 'Shot landed on target=%s (outstanding=%d)'
+                              % (target_id, _outstanding_shots[target_id]))
             except Exception as exc:
                 _log_warning('showShotResults hook error: %s' % exc)
 
@@ -344,14 +432,32 @@ def _install_player_avatar_hooks():
                     if not _is_allowed_arena():
                         _log_info('Arena type filtered out.')
                         return
+                    # Reload config so that a freshly installed token (new
+                    # event, switched streamer name, etc.) is picked up
+                    # without requiring a WoT client restart.
+                    try:
+                        global _cfg
+                        _cfg = _load_config()
+                    except Exception as cfg_exc:
+                        _log_warning('config reload failed: %s' % cfg_exc)
                     _in_battle[0] = True
                     _vehicle_hp_cache.clear()
+                    _outstanding_shots.clear()
                     _last_shot_target_id[0] = None
-                    _log_info('Battle started -- DamageRace active.')
+                    _assist_damage[0] = 0
+                    _subscribe_feedback()
+                    _log_info('Battle started -- DamageRace active (token=%s...).'
+                              % (_cfg.get('streamer_token', '') or '')[:8])
                 elif period >= _ARENA_PERIOD_AFTERBATTLE:
                     _in_battle[0] = False
+                    assist = _assist_damage[0]
+                    _assist_damage[0] = 0
+                    if assist > 0:
+                        _pending_damage[0] += assist
+                        _log_info('Battle ended -- adding assist=%d' % assist)
                     if _pending_damage[0] > 0:
                         _do_send()
+                    _unsubscribe_feedback()
                     _log_info('Battle ended.')
             except Exception as exc:
                 _log_warning('arena period hook error: %s' % exc)
@@ -380,13 +486,24 @@ def _install_vehicle_hooks():
                 _vehicle_hp_cache[self.id] = new_health
                 if not _in_battle[0] or not _cfg.get('enabled', True):
                     return
-                if self.id != _last_shot_target_id[0]:
-                    return
                 if previous is None:
                     return
                 damage = int(previous) - int(new_health)
                 if damage <= 0:
                     return
+                # Only count this HP drop if we have an outstanding shot on
+                # this vehicle. Otherwise it's teammate/artillery damage that
+                # would otherwise be mis-attributed to us.
+                remaining = _outstanding_shots.get(self.id, 0)
+                if remaining <= 0:
+                    _file_log('TRACE',
+                              'Ignoring HP drop on vehicle=%s (no outstanding shot)'
+                              % self.id)
+                    return
+                if remaining == 1:
+                    del _outstanding_shots[self.id]
+                else:
+                    _outstanding_shots[self.id] = remaining - 1
                 cap = _cfg.get('max_damage_per_send', 10000)
                 if cap and damage > cap:
                     _log_warning('Clamped implausible damage: %d -> %d'

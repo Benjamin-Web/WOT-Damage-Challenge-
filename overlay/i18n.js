@@ -145,6 +145,7 @@
       'join.done':                'Erledigt',
 
       'overlay.remaining':        'Restschaden',
+      'overlay.remaining_to_win': 'Bis zum Sieg',
       'overlay.goal_reached':     '✓ Ziel erreicht!',
       'overlay.paused':           '⏸ Pause',
     },
@@ -280,6 +281,7 @@
       'join.done':                'Done',
 
       'overlay.remaining':        'Remaining',
+      'overlay.remaining_to_win': 'To win',
       'overlay.goal_reached':     '✓ Goal reached!',
       'overlay.paused':           '⏸ Paused',
     },

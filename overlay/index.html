@@ -186,15 +186,42 @@
         if (data.error) return;
 
         const event = data.event || {};
-        const remaining = event.remaining;
         const goal = event.goal;
-        const done = remaining <= 0;
-        const percent = goal > 0 ? Math.min(100, (goal - remaining) / goal * 100) : 0;
+        const isVersus = event.mode === 'versus';
+        const teams = data.teams || [];
+
+        // In versus, every team races to `goal` independently. The "Restschaden"
+        // shown at the top is the leading team's remaining damage (i.e. how
+        // much the closest-to-victory team still needs). In coop it's the
+        // shared global remaining as before.
+        let remaining, percent, done;
+        if (isVersus && teams.length) {
+          const teamRemaining = teams.map(function (t) {
+            return Math.max(0, goal - t.damage);
+          });
+          remaining = Math.min.apply(null, teamRemaining);
+          percent = goal > 0 ? Math.min(100, (goal - remaining) / goal * 100) : 0;
+          done = remaining <= 0;
+        } else {
+          remaining = event.remaining;
+          done = remaining <= 0;
+          percent = goal > 0 ? Math.min(100, (goal - remaining) / goal * 100) : 0;
+        }
 
         $('evname').firstChild.nodeValue = event.name || 'DamageRace';
-        $('evsub').textContent = event.mode === 'versus'
+        $('evsub').textContent = isVersus
           ? ' · Versus'
           : (event.mode === 'coop' ? ' · Coop' : '');
+
+        // Re-label the global counter so it reflects what's actually shown.
+        const lbl = $('lbl-remaining');
+        if (lbl) {
+          const key = isVersus ? 'overlay.remaining_to_win' : 'overlay.remaining';
+          lbl.setAttribute('data-i18n', key);
+          if (window.i18n && typeof i18n.t === 'function') {
+            lbl.textContent = i18n.t(key, lbl.textContent);
+          }
+        }
 
         if (lastValue !== null && remaining !== lastValue) {
           clearTimeout(flashTimer);
