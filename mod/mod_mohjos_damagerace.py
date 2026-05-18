@@ -229,12 +229,12 @@ def _do_send():
             _log_info('Posted damage=%d' % damage)
 
     try:
-        BigWorld.fetchURL(url, _on_response,
-                          {'Content-Type': 'application/json'}, payload)
+        BigWorld.fetchURL(url, _on_response, payload,
+                          {'Content-Type': 'application/json'}, 'POST')
     except TypeError:
         try:
-            BigWorld.fetchURL(url, _on_response,
-                              'Content-Type: application/json\r\n', payload)
+            BigWorld.fetchURL(url, _on_response, payload,
+                              'Content-Type: application/json\r\n', 'POST')
         except Exception:
             get_url = '%s?streamer_token=%s&damage=%d&key=%s' % (
                 url, token, damage, key,

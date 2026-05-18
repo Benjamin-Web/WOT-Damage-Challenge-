@@ -268,6 +268,14 @@ def _auth_done_page(msg: str, ok: bool = True) -> str:
 def post_damage():
     if request.method == "POST":
         payload = _read_json()
+        try:
+            log.warning("DAMAGE_DEBUG ct=%r len=%d raw=%r parsed=%r",
+                        request.headers.get("Content-Type"),
+                        request.content_length or 0,
+                        request.get_data(as_text=True)[:200],
+                        payload)
+        except Exception:
+            pass
         token = payload.get("streamer_token") or payload.get("token") or payload.get("streamer")
         raw_damage = payload.get("damage", 0)
         key = payload.get("key")
