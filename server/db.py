@@ -441,6 +441,72 @@ class Database:
                 "team":  dict(team) if team else None,
             }, None
 
+    # ── Owner-managed roster ──────────────────────────────────────────────────
+
+    def add_streamer(self, event_id: int, team_id: int | None,
+                     wot_name: str) -> tuple[dict | None, str | None]:
+        wot_name = (wot_name or "").strip()
+        if not wot_name:
+            return None, "roster.wot_name_empty"
+        with self._lock, self._conn() as c:
+            if team_id is not None:
+                team = c.execute(
+                    "SELECT id FROM teams WHERE id = ? AND event_id = ?",
+                    (team_id, event_id),
+                ).fetchone()
+                if not team:
+                    return None, "roster.team_not_in_event"
+            existing = c.execute(
+                "SELECT * FROM streamers WHERE event_id = ? AND wot_name = ?",
+                (event_id, wot_name),
+            ).fetchone()
+            if existing:
+                c.execute(
+                    "UPDATE streamers SET team_id = ?, active = 1 WHERE token = ?",
+                    (team_id, existing["token"]),
+                )
+                token = existing["token"]
+            else:
+                token = _new_uuid()
+                c.execute(
+                    """
+                    INSERT INTO streamers (token, event_id, team_id, wot_name, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (token, event_id, team_id, wot_name, _now_iso()),
+                )
+            return {"streamer_token": token, "wot_name": wot_name,
+                    "team_id": team_id}, None
+
+    def move_streamer(self, event_id: int, wot_name: str,
+                      team_id: int | None) -> str | None:
+        with self._lock, self._conn() as c:
+            if team_id is not None:
+                team = c.execute(
+                    "SELECT id FROM teams WHERE id = ? AND event_id = ?",
+                    (team_id, event_id),
+                ).fetchone()
+                if not team:
+                    return "roster.team_not_in_event"
+            res = c.execute(
+                "UPDATE streamers SET team_id = ? "
+                "WHERE event_id = ? AND wot_name = ?",
+                (team_id, event_id, wot_name),
+            )
+            if res.rowcount == 0:
+                return "roster.streamer_unknown"
+            return None
+
+    def remove_streamer(self, event_id: int, wot_name: str) -> str | None:
+        with self._lock, self._conn() as c:
+            res = c.execute(
+                "DELETE FROM streamers WHERE event_id = ? AND wot_name = ?",
+                (event_id, wot_name),
+            )
+            if res.rowcount == 0:
+                return "roster.streamer_unknown"
+            return None
+
     # ── Damage ────────────────────────────────────────────────────────────────
 
     def record_damage(self, streamer_token: str, damage: int,

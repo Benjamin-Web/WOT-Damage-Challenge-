@@ -443,6 +443,74 @@ def api_event_delete():
     return jsonify({"ok": True})
 
 
+def _owner_event():
+    user = _require_user()
+    if not user:
+        return None, _error("auth.required", status=401)
+    event = db.get_event_by_owner(user["twitch_id"])
+    if not event:
+        return None, _error("event.none", status=404)
+    return event, None
+
+
+def _parse_team_id(raw):
+    if raw in (None, "", 0, "0"):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return "invalid"
+
+
+@app.route("/api/event/streamer/add", methods=["POST"])
+@_route_safe
+def api_streamer_add():
+    event, err = _owner_event()
+    if err:
+        return err
+    data = _read_json()
+    team_id = _parse_team_id(data.get("team_id"))
+    if team_id == "invalid":
+        return _error("roster.team_not_in_event")
+    result, err_key = db.add_streamer(event["id"], team_id,
+                                      data.get("wot_name", ""))
+    if err_key:
+        return _error(err_key)
+    return jsonify({"ok": True, "streamer": result,
+                    **db.get_event_state(event["id"], base_url=_base_url())})
+
+
+@app.route("/api/event/streamer/move", methods=["POST"])
+@_route_safe
+def api_streamer_move():
+    event, err = _owner_event()
+    if err:
+        return err
+    data = _read_json()
+    team_id = _parse_team_id(data.get("team_id"))
+    if team_id == "invalid":
+        return _error("roster.team_not_in_event")
+    err_key = db.move_streamer(event["id"], data.get("wot_name", ""), team_id)
+    if err_key:
+        return _error(err_key, status=404 if err_key == "roster.streamer_unknown" else 400)
+    return jsonify({"ok": True,
+                    **db.get_event_state(event["id"], base_url=_base_url())})
+
+
+@app.route("/api/event/streamer/remove", methods=["POST"])
+@_route_safe
+def api_streamer_remove():
+    event, err = _owner_event()
+    if err:
+        return err
+    data = _read_json()
+    err_key = db.remove_streamer(event["id"], data.get("wot_name", ""))
+    if err_key:
+        return _error(err_key, status=404)
+    return jsonify({"ok": True,
+                    **db.get_event_state(event["id"], base_url=_base_url())})
+
+
 # ── Public invite + join ──────────────────────────────────────────────────────
 
 @app.route("/api/invite/<token>")

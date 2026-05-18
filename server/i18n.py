@@ -57,6 +57,13 @@ _MESSAGES: dict[str, dict[str, str]] = {
 
     "event.not_found":        {"de": "Event nicht gefunden.",
                                "en": "Event not found."},
+
+    "roster.wot_name_empty":   {"de": "WoT-Name darf nicht leer sein.",
+                                "en": "WoT name must not be empty."},
+    "roster.team_not_in_event":{"de": "Team gehoert nicht zu diesem Event.",
+                                "en": "Team does not belong to this event."},
+    "roster.streamer_unknown": {"de": "Streamer nicht im Event gefunden.",
+                                "en": "Streamer not found in this event."},
 }
 
 
