@@ -341,6 +341,16 @@
               </div>
             </div>
 
+            <div>
+              <label data-i18n="admin.adjust_mode">Modus</label>
+              <div class="row-2">
+                <button class="btn btn-secondary btn-block" id="mode-coop-btn"
+                        onclick="setMode('coop')">Coop</button>
+                <button class="btn btn-secondary btn-block" id="mode-versus-btn"
+                        onclick="setMode('versus')">Versus</button>
+              </div>
+            </div>
+
             <div class="row gap-sm">
               <button class="btn btn-warn btn-block" id="pause-btn" onclick="togglePause()">⏸</button>
               <button class="btn btn-danger btn-block" onclick="resetEvent()"
@@ -692,7 +702,55 @@
         : i18n.t('admin.pause');
       $('pause-btn').className = 'btn btn-block ' + (event.paused ? 'btn-secondary' : 'btn-warn');
 
+      // Highlight the active mode button.
+      const coopBtn = document.getElementById('mode-coop-btn');
+      const versusBtn = document.getElementById('mode-versus-btn');
+      if (coopBtn && versusBtn) {
+        const isVersus = event.mode === 'versus';
+        coopBtn.className = 'btn btn-block ' + (isVersus ? 'btn-secondary' : 'btn-primary');
+        versusBtn.className = 'btn btn-block ' + (isVersus ? 'btn-primary' : 'btn-secondary');
+      }
+
       $('ev-url').textContent = event.invite_url || '—';
+
+      // Streamers whose team was removed end up with team_id = null. Surface
+      // them in a small "no team" strip so the owner can drag them back into
+      // a team instead of losing track of them.
+      const orphans = Object.entries(data.streamers || {}).filter(function (kv) {
+        return kv[1] && kv[1].team_id == null;
+      });
+      let orphanEl = document.getElementById('orphan-area');
+      if (orphans.length) {
+        if (!orphanEl) {
+          orphanEl = document.createElement('div');
+          orphanEl.id = 'orphan-area';
+          orphanEl.className = 'team-card';
+          orphanEl.style.borderStyle = 'dashed';
+          orphanEl.style.opacity = '0.85';
+          orphanEl.style.marginBottom = '12px';
+          const teamsParent = $('teams-area').parentNode;
+          teamsParent.insertBefore(orphanEl, $('teams-area'));
+        }
+        const chips = orphans.map(function (kv) {
+          const name = kv[0];
+          const sInfo = kv[1] || {};
+          const safe = escapeHtml(name);
+          return '<span class="member-chip" draggable="true"' +
+                   ' data-wot-name="' + safe + '"' +
+                   ' ondragstart="onChipDragStart(event)"' +
+                   ' ondragend="onChipDragEnd(event)">' +
+                   safe +
+                   '<span class="dmg">' + fmt(sInfo.damage || 0) + '</span>' +
+                 '</span>';
+        }).join('');
+        orphanEl.innerHTML =
+          '<div class="team-head"><span class="team-name-big">' +
+            i18n.t('admin.team.unassigned') +
+          '</span></div>' +
+          '<div class="members-row">' + chips + '</div>';
+      } else if (orphanEl) {
+        orphanEl.remove();
+      }
 
       const teamsEl = $('teams-area');
       if (!data.teams || data.teams.length === 0) {
@@ -743,7 +801,12 @@
                   ' style="--tc:' + team.color + '">' +
             '<div class="team-head">' +
               '<span class="team-dot" style="background:' + team.color + '; color:' + team.color + '"></span>' +
-              '<span class="team-name-big">' + escapeHtml(team.name) + '</span>' +
+              '<span class="team-name-big" style="cursor:pointer"' +
+                ' onclick="renameLiveTeam(' + team.id + ', \'' +
+                  team.name.replace(/'/g, "\\'") + '\')"' +
+                ' title="' + i18n.t('admin.team.rename_title') + '">' +
+                escapeHtml(team.name) +
+              '</span>' +
               '<div class="spacer"></div>' +
               '<div class="team-stats">' +
                 '<span><b>' + fmt(team.damage) + '</b> ' + i18n.t('admin.team.damage') + '</span>' +
@@ -751,6 +814,10 @@
                   ? '<span><b>' + fmt(remTeam) + '</b> ' + i18n.t('admin.team.remaining') + '</span>'
                   : '') +
               '</div>' +
+              '<button class="chip-x team-remove" title="' +
+                i18n.t('admin.team.remove_team') + '"' +
+                ' onclick="deleteLiveTeam(' + team.id + ', \'' +
+                  team.name.replace(/'/g, "\\'") + '\')">×</button>' +
             '</div>' +
             '<div class="team-bar">' +
               '<div class="team-bar-fill" style="width:' + teamPct + '%;' +
@@ -774,7 +841,16 @@
                 'title="' + i18n.t('common.regenerate') + '">↻</button>' +
             '</div>' +
           '</div>';
-        }).join('');
+        }).join('') +
+        // Append-team card (only shown while below MAX_TEAMS=4).
+        (data.teams.length < 4
+          ? '<div class="team-card" style="display:flex; align-items:center; ' +
+              'justify-content:center; min-height:80px; border-style:dashed; ' +
+              'opacity:0.7; cursor:pointer" onclick="addLiveTeam()">' +
+              '<span style="font-size:14px; font-weight:600;">＋ ' +
+                i18n.t('admin.team.add_team') + '</span>' +
+            '</div>'
+          : '');
       }
 
       const log = (data.event_log || []).slice().reverse();
@@ -900,6 +976,69 @@
         toast(i18n.t('admin.toast.goal_updated'));
         $('i-goal').value = '';
         refresh();
+      }
+    }
+
+    async function setMode(mode) {
+      if (!mode || (latest && latest.event && latest.event.mode === mode)) return;
+      const data = await fetchJson('/api/event/set', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ mode: mode }),
+      });
+      if (data.ok) {
+        toast(i18n.t('admin.toast.mode_updated'));
+        refresh();
+      }
+    }
+
+    async function addLiveTeam() {
+      const name = (prompt(i18n.t('admin.team.add_team_prompt'), '') || '').trim();
+      if (!name) return;
+      const data = await fetchJson('/api/event/team/add', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ name: name }),
+      });
+      if (data.ok) {
+        toast(i18n.t('admin.toast.team_added'));
+        refresh();
+      } else if (data.error) {
+        toast(data.error, 'err');
+      }
+    }
+
+    async function deleteLiveTeam(teamId, teamName) {
+      const msg = i18n.t('admin.team.remove_confirm').replace('{name}', teamName);
+      if (!confirm(msg)) return;
+      const data = await fetchJson('/api/event/team/remove', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ team_id: teamId }),
+      });
+      if (data.ok) {
+        toast(i18n.t('admin.toast.team_removed'));
+        refresh();
+      } else if (data.error) {
+        toast(data.error, 'err');
+      }
+    }
+
+    async function renameLiveTeam(teamId, currentName) {
+      const next = prompt(i18n.t('admin.team.rename_prompt'), currentName);
+      if (next === null) return;
+      const name = next.trim();
+      if (!name || name === currentName) return;
+      const data = await fetchJson('/api/event/team/rename', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ team_id: teamId, name: name }),
+      });
+      if (data.ok) {
+        toast(i18n.t('admin.toast.team_renamed'));
+        refresh();
+      } else if (data.error) {
+        toast(data.error, 'err');
       }
     }
 
@@ -1182,6 +1321,7 @@
       onChipDragStart, onChipDragEnd,
       onTeamDragOver, onTeamDragLeave, onTeamDrop,
       saveDiscordWebhook, testDiscord, finishEvent, addToObs,
+      setMode, addLiveTeam, deleteLiveTeam, renameLiveTeam,
     });
     window.wizardTeams = wizardTeams;
 

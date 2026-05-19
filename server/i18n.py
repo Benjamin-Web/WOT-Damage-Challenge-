@@ -58,6 +58,15 @@ _MESSAGES: dict[str, dict[str, str]] = {
     "event.not_found":        {"de": "Event nicht gefunden.",
                                "en": "Event not found."},
 
+    "team.name_empty":         {"de": "Team-Name darf nicht leer sein.",
+                                "en": "Team name must not be empty."},
+    "team.too_many":           {"de": "Maximal 4 Teams pro Event.",
+                                "en": "A maximum of 4 teams per event is allowed."},
+    "team.min_required":       {"de": "Mindestens 2 Teams sind erforderlich.",
+                                "en": "At least 2 teams are required."},
+    "team.not_found":          {"de": "Team nicht gefunden.",
+                                "en": "Team not found."},
+
     "roster.wot_name_empty":   {"de": "WoT-Name darf nicht leer sein.",
                                 "en": "WoT name must not be empty."},
     "roster.team_not_in_event":{"de": "Team gehoert nicht zu diesem Event.",

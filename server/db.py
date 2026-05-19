@@ -358,6 +358,99 @@ class Database:
                       "WHERE event_id = ?", (event_id,))
             c.execute("DELETE FROM event_log WHERE event_id = ?", (event_id,))
 
+    def set_event_mode(self, event_id: int, mode: str) -> None:
+        """Switch coop ↔ versus in-place. Streamer tokens and team rows
+        survive — only the event row's `mode` flag is rewritten, so the
+        overlay re-renders and damage continues to accrue without anyone
+        needing to rejoin."""
+        with self._lock, self._conn() as c:
+            c.execute("UPDATE events SET mode = ? WHERE id = ?",
+                      (mode, event_id))
+
+    def add_team(self, event_id: int, name: str,
+                 color: str = "#ffd700") -> tuple[dict | None, str | None]:
+        """Append a new team to an existing event. Caps at MAX_TEAMS."""
+        name = (name or "").strip()
+        if not name:
+            return None, "team.name_empty"
+        color = (color or "#ffd700").strip()
+        with self._lock, self._conn() as c:
+            row = c.execute(
+                "SELECT COUNT(*) AS n, COALESCE(MAX(position), -1) AS p "
+                "FROM teams WHERE event_id = ?", (event_id,),
+            ).fetchone()
+            if int(row["n"]) >= MAX_TEAMS:
+                return None, "team.too_many"
+            position = int(row["p"]) + 1
+            cur = c.execute(
+                """
+                INSERT INTO teams (event_id, position, name, color, damage,
+                                   invite_token)
+                VALUES (?, ?, ?, ?, 0, ?)
+                """,
+                (event_id, position, name, color, _new_token("tm_")),
+            )
+            team = c.execute(
+                "SELECT * FROM teams WHERE id = ?", (cur.lastrowid,),
+            ).fetchone()
+        return dict(team), None
+
+    def remove_team(self, event_id: int, team_id: int
+                    ) -> tuple[bool, str | None]:
+        """Delete a team but keep its members as 'no team' streamers so
+        their tokens (and accumulated damage) stay valid. Refuses to drop
+        below MIN_TEAMS so the event mode (especially versus) stays sane."""
+        with self._lock, self._conn() as c:
+            existing = c.execute(
+                "SELECT id FROM teams WHERE id = ? AND event_id = ?",
+                (team_id, event_id),
+            ).fetchone()
+            if not existing:
+                return False, "team.not_found"
+            count = int(c.execute(
+                "SELECT COUNT(*) AS n FROM teams WHERE event_id = ?",
+                (event_id,),
+            ).fetchone()["n"])
+            if count <= MIN_TEAMS:
+                return False, "team.min_required"
+            # Move members to "no team" so their streamer_token stays valid.
+            c.execute(
+                "UPDATE streamers SET team_id = NULL WHERE team_id = ?",
+                (team_id,),
+            )
+            c.execute("DELETE FROM teams WHERE id = ?", (team_id,))
+        return True, None
+
+    def rename_team(self, event_id: int, team_id: int,
+                    name: str | None = None,
+                    color: str | None = None) -> tuple[bool, str | None]:
+        """Update a team's display name and/or color without touching its
+        invite_token or damage count."""
+        sets, params = [], []
+        if name is not None:
+            name = name.strip()
+            if not name:
+                return False, "team.name_empty"
+            sets.append("name = ?")
+            params.append(name)
+        if color is not None:
+            color = (color or "").strip() or "#ffd700"
+            sets.append("color = ?")
+            params.append(color)
+        if not sets:
+            return True, None
+        with self._lock, self._conn() as c:
+            existing = c.execute(
+                "SELECT id FROM teams WHERE id = ? AND event_id = ?",
+                (team_id, event_id),
+            ).fetchone()
+            if not existing:
+                return False, "team.not_found"
+            params.extend([team_id])
+            c.execute(f"UPDATE teams SET {', '.join(sets)} WHERE id = ?",
+                      params)
+        return True, None
+
     def regenerate_event_invite(self, event_id: int) -> str:
         token = _new_token("ev_")
         with self._lock, self._conn() as c:

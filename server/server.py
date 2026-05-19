@@ -385,15 +385,75 @@ def api_event_set():
     data = _read_json()
     if data.get("reset"):
         db.reset_event(event["id"], new_goal=data.get("goal"))
-    elif data.get("goal") is not None:
-        try:
-            goal = int(data["goal"])
-        except (TypeError, ValueError):
-            return _error("event.goal_invalid")
-        if goal <= 0:
-            return _error("event.goal_invalid")
-        db.set_event_goal(event["id"], goal)
+    else:
+        if data.get("goal") is not None:
+            try:
+                goal = int(data["goal"])
+            except (TypeError, ValueError):
+                return _error("event.goal_invalid")
+            if goal <= 0:
+                return _error("event.goal_invalid")
+            db.set_event_goal(event["id"], goal)
+        if data.get("mode") is not None:
+            mode = str(data["mode"]).strip().lower()
+            if mode not in VALID_MODES:
+                return _error("event.mode_invalid")
+            db.set_event_mode(event["id"], mode)
     return jsonify({"ok": True, **db.get_event_state(event["id"], base_url=_base_url())})
+
+
+@app.route("/api/event/team/add", methods=["POST"])
+@_route_safe
+def api_event_team_add():
+    event, err = _owner_event()
+    if err:
+        return err
+    data = _read_json()
+    team, key = db.add_team(event["id"],
+                            name=data.get("name") or "",
+                            color=data.get("color") or "#ffd700")
+    if key:
+        return _error(key)
+    return jsonify({"ok": True, "team": team,
+                    **db.get_event_state(event["id"], base_url=_base_url())})
+
+
+@app.route("/api/event/team/remove", methods=["POST"])
+@_route_safe
+def api_event_team_remove():
+    event, err = _owner_event()
+    if err:
+        return err
+    data = _read_json()
+    try:
+        team_id = int(data.get("team_id"))
+    except (TypeError, ValueError):
+        return _error("event.invalid_payload")
+    ok, key = db.remove_team(event["id"], team_id)
+    if not ok:
+        return _error(key or "event.invalid_payload")
+    return jsonify({"ok": True,
+                    **db.get_event_state(event["id"], base_url=_base_url())})
+
+
+@app.route("/api/event/team/rename", methods=["POST"])
+@_route_safe
+def api_event_team_rename():
+    event, err = _owner_event()
+    if err:
+        return err
+    data = _read_json()
+    try:
+        team_id = int(data.get("team_id"))
+    except (TypeError, ValueError):
+        return _error("event.invalid_payload")
+    ok, key = db.rename_team(event["id"], team_id,
+                             name=data.get("name"),
+                             color=data.get("color"))
+    if not ok:
+        return _error(key or "event.invalid_payload")
+    return jsonify({"ok": True,
+                    **db.get_event_state(event["id"], base_url=_base_url())})
 
 
 @app.route("/api/event/pause", methods=["POST"])
