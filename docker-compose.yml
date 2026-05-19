@@ -14,7 +14,9 @@ services:
       # TWITCH_CLIENT_ID: "5ns5vekvgz8wb6wudfsos1nvzsa4sq"
     volumes:
       - ./server/config.py:/app/server/config.py:ro
-      - ./data:/app/data     # SQLite-DB persistent
+      - ./server:/app/server:ro     # live-reload für Server-Python-Code
+      - ./overlay:/app/overlay:ro   # live-reload für Frontend (admin.html, i18n.js, overlay/index.html …)
+      - ./data:/app/data            # SQLite-DB persistent
     networks:
       - web
 
