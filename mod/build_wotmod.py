@@ -25,7 +25,7 @@ INTERNAL_PYC  = 'res/scripts/client/gui/mods/mod_mohjos_damagerace.pyc'
 
 MOD_ID      = 'com.mohjos.damagerace'
 MOD_NAME    = 'Mohjos DamageRace'
-MOD_VERSION = '1.0.0'
+MOD_VERSION = '1.0.1'
 MOD_DESC    = 'Community Damage Race tracker for World of Tanks.'
 
 META_XML = (
