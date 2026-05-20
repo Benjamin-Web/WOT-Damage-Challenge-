@@ -7,6 +7,8 @@
 [![Docker](https://img.shields.io/badge/Server-Docker%20ready-1e1e28?logo=docker)](https://hub.docker.com)
 [![by Mohjo_beist](https://img.shields.io/badge/by-Mohjo__beist-FFD700)](https://github.com/Benjamin-Web)
 
+**🇩🇪 Deutsch** · [🇬🇧 English](README.en.md)
+
 **Streamer-Wettkampf, automatisch.**
 Events, Teams, Einladungslinks — komplett in der DamageRace.exe steuerbar, kein Browser nötig.
 
