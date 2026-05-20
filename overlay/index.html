@@ -166,6 +166,7 @@
     const POLL_MS = 500;
     let lastValue = null;
     let flashTimer = null;
+    let lastLblKey = null;
 
     const $ = function (id) { return document.getElementById(id); };
 
@@ -213,13 +214,15 @@
           ? ' · Versus'
           : (event.mode === 'coop' ? ' · Coop' : '');
 
-        // Re-label the global counter so it reflects what's actually shown.
+        // Re-label the global counter to match what's shown. Only touch the
+        // DOM when the mode actually flips — poll() runs twice a second.
+        const lblKey = isVersus ? 'overlay.remaining_to_win' : 'overlay.remaining';
         const lbl = $('lbl-remaining');
-        if (lbl) {
-          const key = isVersus ? 'overlay.remaining_to_win' : 'overlay.remaining';
-          lbl.setAttribute('data-i18n', key);
+        if (lbl && lblKey !== lastLblKey) {
+          lastLblKey = lblKey;
+          lbl.setAttribute('data-i18n', lblKey);
           if (window.i18n && typeof i18n.t === 'function') {
-            lbl.textContent = i18n.t(key, lbl.textContent);
+            lbl.textContent = i18n.t(lblKey);
           }
         }
 

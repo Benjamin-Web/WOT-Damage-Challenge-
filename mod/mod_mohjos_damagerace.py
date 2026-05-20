@@ -166,7 +166,6 @@ def _load_config():
 _cfg = _load_config()
 
 _in_battle = [False]
-_last_shot_target_id = [None]
 _outstanding_shots = {}  # vehicle_id -> count of our shots awaiting an HP drop
 _vehicle_hp_cache = {}
 _pending_damage = [0]
@@ -265,19 +264,13 @@ def _do_send():
 # ---------------------------------------------------------------------------
 # Battle feedback (assist damage).
 
-_ASSIST_EVENT_NAMES = (
-    'PLAYER_ASSIST_TO_KILL_ENEMY',  # combined spot+track damage credit
-    'PLAYER_SPOTTED_ENEMY',
-    'PLAYER_USED_ARMOR',  # not assist, kept out of set below
-)
-
+# WG fires this feedback event carrying the spot+track damage credited to us.
 _ASSIST_EVENT_IDS = set()
 if _FEEDBACK_EVENT_ID is not None:
-    for _name in ('PLAYER_ASSIST_TO_KILL_ENEMY',):
-        try:
-            _ASSIST_EVENT_IDS.add(getattr(_FEEDBACK_EVENT_ID, _name))
-        except Exception:
-            pass
+    try:
+        _ASSIST_EVENT_IDS.add(_FEEDBACK_EVENT_ID.PLAYER_ASSIST_TO_KILL_ENEMY)
+    except Exception:
+        pass
 
 
 def _on_player_feedback(events):
@@ -407,7 +400,6 @@ def _install_player_avatar_hooks():
             try:
                 target_id = _extract_shot_target(args)
                 if target_id is not None:
-                    _last_shot_target_id[0] = target_id
                     _outstanding_shots[target_id] = (
                         _outstanding_shots.get(target_id, 0) + 1)
                     _file_log('INFO', 'Shot landed on target=%s (outstanding=%d)'
@@ -443,7 +435,6 @@ def _install_player_avatar_hooks():
                     _in_battle[0] = True
                     _vehicle_hp_cache.clear()
                     _outstanding_shots.clear()
-                    _last_shot_target_id[0] = None
                     _assist_damage[0] = 0
                     _subscribe_feedback()
                     _log_info('Battle started -- DamageRace active (token=%s...).'
@@ -481,8 +472,9 @@ def _install_vehicle_hooks():
             orig(self, new_health, *args, **kwargs)
             try:
                 _file_log('TRACE',
-                          'onHealthChanged vehicle=%s prev=%s new=%s lastTarget=%s'
-                          % (self.id, previous, new_health, _last_shot_target_id[0]))
+                          'onHealthChanged vehicle=%s prev=%s new=%s outstanding=%d'
+                          % (self.id, previous, new_health,
+                             _outstanding_shots.get(self.id, 0)))
                 _vehicle_hp_cache[self.id] = new_health
                 if not _in_battle[0] or not _cfg.get('enabled', True):
                     return

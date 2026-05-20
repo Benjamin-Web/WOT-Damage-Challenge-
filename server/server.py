@@ -376,12 +376,9 @@ def api_create_event():
 @app.route("/api/event/set", methods=["POST"])
 @_route_safe
 def api_event_set():
-    user = _require_user()
-    if not user:
-        return _error("auth.required", status=401)
-    event = db.get_event_by_owner(user["twitch_id"])
-    if not event:
-        return _error("event.none", status=404)
+    event, err = _owner_event()
+    if err:
+        return err
     data = _read_json()
     if data.get("reset"):
         db.reset_event(event["id"], new_goal=data.get("goal"))
@@ -425,9 +422,8 @@ def api_event_team_remove():
     if err:
         return err
     data = _read_json()
-    try:
-        team_id = int(data.get("team_id"))
-    except (TypeError, ValueError):
+    team_id = _parse_team_id(data.get("team_id"))
+    if team_id in (None, "invalid"):
         return _error("event.invalid_payload")
     ok, key = db.remove_team(event["id"], team_id)
     if not ok:
@@ -443,9 +439,8 @@ def api_event_team_rename():
     if err:
         return err
     data = _read_json()
-    try:
-        team_id = int(data.get("team_id"))
-    except (TypeError, ValueError):
+    team_id = _parse_team_id(data.get("team_id"))
+    if team_id in (None, "invalid"):
         return _error("event.invalid_payload")
     ok, key = db.rename_team(event["id"], team_id,
                              name=data.get("name"),

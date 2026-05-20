@@ -74,6 +74,12 @@
       padding: 16px 18px;
       margin-bottom: 12px;
     }
+    .team-card.orphan { border-style: dashed; opacity: 0.85; }
+    .team-card.add-card {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 80px; border-style: dashed; opacity: 0.7; cursor: pointer;
+    }
+    .team-card.add-card span { font-size: 14px; font-weight: 600; }
     .team-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
     .team-dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
     .team-name-big { font-size: 16px; font-weight: 800; }
@@ -724,30 +730,32 @@
         if (!orphanEl) {
           orphanEl = document.createElement('div');
           orphanEl.id = 'orphan-area';
-          orphanEl.className = 'team-card';
-          orphanEl.style.borderStyle = 'dashed';
-          orphanEl.style.opacity = '0.85';
-          orphanEl.style.marginBottom = '12px';
-          const teamsParent = $('teams-area').parentNode;
-          teamsParent.insertBefore(orphanEl, $('teams-area'));
+          orphanEl.className = 'team-card orphan';
+          $('teams-area').parentNode.insertBefore(orphanEl, $('teams-area'));
         }
-        const chips = orphans.map(function (kv) {
-          const name = kv[0];
-          const sInfo = kv[1] || {};
-          const safe = escapeHtml(name);
-          return '<span class="member-chip" draggable="true"' +
-                   ' data-wot-name="' + safe + '"' +
-                   ' ondragstart="onChipDragStart(event)"' +
-                   ' ondragend="onChipDragEnd(event)">' +
-                   safe +
-                   '<span class="dmg">' + fmt(sInfo.damage || 0) + '</span>' +
-                 '</span>';
-        }).join('');
-        orphanEl.innerHTML =
-          '<div class="team-head"><span class="team-name-big">' +
-            i18n.t('admin.team.unassigned') +
-          '</span></div>' +
-          '<div class="members-row">' + chips + '</div>';
+        // Skip the innerHTML rewrite when the orphan set is unchanged —
+        // render() runs on every poll tick.
+        const sig = orphans.map(function (kv) {
+          return kv[0] + ':' + (kv[1].damage || 0);
+        }).join('|');
+        if (orphanEl.dataset.sig !== sig) {
+          orphanEl.dataset.sig = sig;
+          const chips = orphans.map(function (kv) {
+            const safe = escapeHtml(kv[0]);
+            return '<span class="member-chip" draggable="true"' +
+                     ' data-wot-name="' + safe + '"' +
+                     ' ondragstart="onChipDragStart(event)"' +
+                     ' ondragend="onChipDragEnd(event)">' +
+                     safe +
+                     '<span class="dmg">' + fmt(kv[1].damage || 0) + '</span>' +
+                   '</span>';
+          }).join('');
+          orphanEl.innerHTML =
+            '<div class="team-head"><span class="team-name-big">' +
+              i18n.t('admin.team.unassigned') +
+            '</span></div>' +
+            '<div class="members-row">' + chips + '</div>';
+        }
       } else if (orphanEl) {
         orphanEl.remove();
       }
@@ -844,11 +852,8 @@
         }).join('') +
         // Append-team card (only shown while below MAX_TEAMS=4).
         (data.teams.length < 4
-          ? '<div class="team-card" style="display:flex; align-items:center; ' +
-              'justify-content:center; min-height:80px; border-style:dashed; ' +
-              'opacity:0.7; cursor:pointer" onclick="addLiveTeam()">' +
-              '<span style="font-size:14px; font-weight:600;">＋ ' +
-                i18n.t('admin.team.add_team') + '</span>' +
+          ? '<div class="team-card add-card" onclick="addLiveTeam()">' +
+              '<span>＋ ' + i18n.t('admin.team.add_team') + '</span>' +
             '</div>'
           : '');
       }
@@ -979,67 +984,46 @@
       }
     }
 
-    async function setMode(mode) {
-      if (!mode || (latest && latest.event && latest.event.mode === mode)) return;
-      const data = await fetchJson('/api/event/set', {
+    // POST a JSON body, toast the localized success/error message, refresh.
+    async function postAction(url, body, okKey) {
+      const data = await fetchJson(url, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ mode: mode }),
+        body:    JSON.stringify(body),
       });
       if (data.ok) {
-        toast(i18n.t('admin.toast.mode_updated'));
+        toast(i18n.t(okKey));
         refresh();
+      } else if (data.error) {
+        toast(data.error, 'err');
       }
     }
 
-    async function addLiveTeam() {
+    function setMode(mode) {
+      if (!mode || (latest && latest.event && latest.event.mode === mode)) return;
+      return postAction('/api/event/set', { mode: mode }, 'admin.toast.mode_updated');
+    }
+
+    function addLiveTeam() {
       const name = (prompt(i18n.t('admin.team.add_team_prompt'), '') || '').trim();
       if (!name) return;
-      const data = await fetchJson('/api/event/team/add', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ name: name }),
-      });
-      if (data.ok) {
-        toast(i18n.t('admin.toast.team_added'));
-        refresh();
-      } else if (data.error) {
-        toast(data.error, 'err');
-      }
+      return postAction('/api/event/team/add', { name: name }, 'admin.toast.team_added');
     }
 
-    async function deleteLiveTeam(teamId, teamName) {
+    function deleteLiveTeam(teamId, teamName) {
       const msg = i18n.t('admin.team.remove_confirm').replace('{name}', teamName);
       if (!confirm(msg)) return;
-      const data = await fetchJson('/api/event/team/remove', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ team_id: teamId }),
-      });
-      if (data.ok) {
-        toast(i18n.t('admin.toast.team_removed'));
-        refresh();
-      } else if (data.error) {
-        toast(data.error, 'err');
-      }
+      return postAction('/api/event/team/remove', { team_id: teamId },
+                        'admin.toast.team_removed');
     }
 
-    async function renameLiveTeam(teamId, currentName) {
+    function renameLiveTeam(teamId, currentName) {
       const next = prompt(i18n.t('admin.team.rename_prompt'), currentName);
       if (next === null) return;
       const name = next.trim();
       if (!name || name === currentName) return;
-      const data = await fetchJson('/api/event/team/rename', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ team_id: teamId, name: name }),
-      });
-      if (data.ok) {
-        toast(i18n.t('admin.toast.team_renamed'));
-        refresh();
-      } else if (data.error) {
-        toast(data.error, 'err');
-      }
+      return postAction('/api/event/team/rename', { team_id: teamId, name: name },
+                        'admin.toast.team_renamed');
     }
 
     async function togglePause() {

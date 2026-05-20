@@ -47,6 +47,18 @@ def _new_uuid() -> str:
     return secrets.token_urlsafe(16)
 
 
+def _insert_team(c, event_id: int, position: int, name: str, color: str):
+    """Insert one team row (damage 0, fresh invite token). Returns the
+    cursor so callers can read ``.lastrowid``."""
+    return c.execute(
+        """
+        INSERT INTO teams (event_id, position, name, color, damage, invite_token)
+        VALUES (?, ?, ?, ?, 0, ?)
+        """,
+        (event_id, position, name, color, _new_token("tm_")),
+    )
+
+
 class Database:
     def __init__(self, path: str = DB_PATH) -> None:
         self.path = path
@@ -315,13 +327,7 @@ class Database:
             for position, spec in enumerate(teams):
                 team_name = (spec.get("name") or f"Team {position + 1}").strip()
                 color = (spec.get("color") or "#ffd700").strip()
-                c.execute(
-                    """
-                    INSERT INTO teams (event_id, position, name, color, damage, invite_token)
-                    VALUES (?, ?, ?, ?, 0, ?)
-                    """,
-                    (event_id, position, team_name, color, _new_token("tm_")),
-                )
+                _insert_team(c, event_id, position, team_name, color)
             log.info("Created event id=%s owner=%s slug=%s teams=%d",
                      event_id, owner_twitch_id, slug, len(teams))
             return event_id
@@ -382,14 +388,7 @@ class Database:
             if int(row["n"]) >= MAX_TEAMS:
                 return None, "team.too_many"
             position = int(row["p"]) + 1
-            cur = c.execute(
-                """
-                INSERT INTO teams (event_id, position, name, color, damage,
-                                   invite_token)
-                VALUES (?, ?, ?, ?, 0, ?)
-                """,
-                (event_id, position, name, color, _new_token("tm_")),
-            )
+            cur = _insert_team(c, event_id, position, name, color)
             team = c.execute(
                 "SELECT * FROM teams WHERE id = ?", (cur.lastrowid,),
             ).fetchone()
@@ -447,6 +446,9 @@ class Database:
             if not existing:
                 return False, "team.not_found"
             params.extend([team_id])
+            # `sets` only ever holds the hardcoded literals "name = ?" /
+            # "color = ?"; values are bound via `params`. Do not append
+            # caller-supplied identifiers here — that would be injectable.
             c.execute(f"UPDATE teams SET {', '.join(sets)} WHERE id = ?",
                       params)
         return True, None
