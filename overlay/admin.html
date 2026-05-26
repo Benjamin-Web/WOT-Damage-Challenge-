@@ -398,10 +398,13 @@
           <div class="field-group">
             <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;"
                  data-i18n="admin.deadline_hint">
-              Zeitfenster bis zum Ziel. Bei Ablauf wird das Event pausiert.
+              Zeitfenster ab jetzt. Bei Ablauf wird das Event pausiert.
             </div>
-            <div class="row-2">
-              <input type="datetime-local" id="i-deadline">
+            <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:8px;">
+              <input type="number" id="dl-hours"   min="0" max="48" step="1"
+                     placeholder="h" data-i18n-placeholder="admin.deadline_h_ph">
+              <input type="number" id="dl-minutes" min="0" max="59" step="1"
+                     placeholder="min" data-i18n-placeholder="admin.deadline_m_ph">
               <button class="btn btn-secondary" onclick="setDeadline()"
                       data-i18n="admin.set">Setzen</button>
             </div>
@@ -774,11 +777,7 @@
         cntAssist.checked = !!event.count_assist;
       }
 
-      // Deadline input + remaining-time status. Input value is local time.
-      const dlInput = document.getElementById('i-deadline');
-      if (dlInput && document.activeElement !== dlInput) {
-        dlInput.value = isoToLocalInput(event.deadline_at);
-      }
+      // Deadline status text — live countdown when active, hint otherwise.
       const dlStatus = document.getElementById('deadline-status');
       if (dlStatus) {
         if (!event.deadline_at) {
@@ -1090,24 +1089,7 @@
       return postAction('/api/event/set', { mode: mode }, 'admin.toast.mode_updated');
     }
 
-    // ── Deadline + Counting helpers ─────────────────────────────────────────
-
-    // Server stores ISO-8601 UTC ("Z"). Input type=datetime-local wants local
-    // wall-clock without TZ. These two helpers bridge between them.
-    function isoToLocalInput(iso) {
-      if (!iso) return '';
-      const d = new Date(iso);
-      if (isNaN(d)) return '';
-      const pad = function (n) { return String(n).padStart(2, '0'); };
-      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
-           + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-    }
-    function localInputToIso(local) {
-      if (!local) return null;
-      const d = new Date(local);
-      if (isNaN(d)) return null;
-      return d.toISOString();
-    }
+    // ── Counting + Deadline helpers ─────────────────────────────────────────
 
     function saveCounting() {
       const direct = document.getElementById('cnt-direct').checked;
@@ -1118,12 +1100,16 @@
     }
 
     function setDeadline() {
-      const local = document.getElementById('i-deadline').value;
-      const iso = localInputToIso(local);
-      if (!iso) {
+      const h = parseInt(document.getElementById('dl-hours').value, 10) || 0;
+      const m = parseInt(document.getElementById('dl-minutes').value, 10) || 0;
+      const totalMs = (h * 3600 + m * 60) * 1000;
+      if (totalMs <= 0) {
         toast(i18n.t('admin.toast.deadline_invalid'), 'err');
         return;
       }
+      const iso = new Date(Date.now() + totalMs).toISOString();
+      document.getElementById('dl-hours').value = '';
+      document.getElementById('dl-minutes').value = '';
       return postAction('/api/event/set', { deadline_at: iso },
                         'admin.toast.deadline_updated');
     }

@@ -417,10 +417,21 @@ def api_event_set():
                 db.set_event_deadline(event["id"], None)
             else:
                 try:
-                    datetime.fromisoformat(str(deadline).replace("Z", "+00:00"))
+                    dt = datetime.fromisoformat(
+                        str(deadline).replace("Z", "+00:00"))
                 except (TypeError, ValueError):
                     return _error("event.deadline_invalid")
-                db.set_event_deadline(event["id"], str(deadline))
+                # Normalize to UTC, second precision, Z-suffix — must match
+                # the format `_now_iso()` produces so the lexicographic
+                # comparison in record_damage / get_event_state stays correct.
+                # Browsers send `.toISOString()` with milliseconds; without
+                # this normalization "Z" > "." in the string compare would
+                # mark the event expired immediately.
+                from datetime import timezone
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+                normalized = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+                db.set_event_deadline(event["id"], normalized)
     return jsonify({"ok": True, **db.get_event_state(event["id"], base_url=_base_url())})
 
 
