@@ -891,6 +891,11 @@ class Database:
         expired = bool(deadline_at and _now_iso() > deadline_at)
 
         return {
+            # `server_now` lets the overlay align its countdown to the same
+            # clock the server uses for the `expired` check. Without this the
+            # banner appears N seconds too early when the VPS clock drifts
+            # ahead of the viewer's clock.
+            "server_now":   _now_iso(),
             "event": {
                 "id":           event["id"],
                 "slug":         event["slug"],

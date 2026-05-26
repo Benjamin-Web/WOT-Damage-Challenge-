@@ -266,11 +266,17 @@
         });
 
         // Deadline countdown + expired banner.
+        // Align to the server clock: any drift between viewer and VPS would
+        // otherwise make the banner pop before the countdown hits 0.
         const cdEl = $('countdown');
         const expired = !!event.expired;
         if (event.deadline_at) {
-          const ms = new Date(event.deadline_at).getTime() - Date.now();
-          if (ms > 0) {
+          const serverNowMs = data.server_now
+            ? new Date(data.server_now).getTime()
+            : Date.now();
+          const drift = serverNowMs - Date.now();
+          const ms = new Date(event.deadline_at).getTime() - Date.now() - drift;
+          if (ms > 0 && !expired) {
             const s = Math.floor(ms / 1000);
             const hh = String(Math.floor(s / 3600)).padStart(2, '0');
             const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');

@@ -778,6 +778,9 @@
       }
 
       // Deadline status text — live countdown when active, hint otherwise.
+      // Align to server clock so the displayed countdown matches the moment
+      // the server flips `expired` (avoids any clock drift between admin's
+      // browser and the VPS).
       const dlStatus = document.getElementById('deadline-status');
       if (dlStatus) {
         if (!event.deadline_at) {
@@ -785,7 +788,11 @@
         } else if (event.expired) {
           dlStatus.textContent = i18n.t('admin.deadline_expired');
         } else {
-          const ms = new Date(event.deadline_at).getTime() - Date.now();
+          const serverNowMs = data.server_now
+            ? new Date(data.server_now).getTime()
+            : Date.now();
+          const drift = serverNowMs - Date.now();
+          const ms = new Date(event.deadline_at).getTime() - Date.now() - drift;
           const s = Math.max(0, Math.floor(ms / 1000));
           const hh = String(Math.floor(s / 3600)).padStart(2, '0');
           const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
