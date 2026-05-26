@@ -1109,15 +1109,16 @@
     function setDeadline() {
       const h = parseInt(document.getElementById('dl-hours').value, 10) || 0;
       const m = parseInt(document.getElementById('dl-minutes').value, 10) || 0;
-      const totalMs = (h * 3600 + m * 60) * 1000;
-      if (totalMs <= 0) {
+      const totalSeconds = h * 3600 + m * 60;
+      if (totalSeconds <= 0) {
         toast(i18n.t('admin.toast.deadline_invalid'), 'err');
         return;
       }
-      const iso = new Date(Date.now() + totalMs).toISOString();
       document.getElementById('dl-hours').value = '';
       document.getElementById('dl-minutes').value = '';
-      return postAction('/api/event/set', { deadline_at: iso },
+      // Server computes the absolute deadline from its own clock, so a
+      // drifted admin browser can't shorten the timer.
+      return postAction('/api/event/set', { deadline_seconds: totalSeconds },
                         'admin.toast.deadline_updated');
     }
 

@@ -408,7 +408,22 @@ def api_event_set():
                 count_direct=bool(data["counting"].get("direct", True)),
                 count_assist=bool(data["counting"].get("assist", False)),
             )
-        if "deadline_at" in data:
+        if "deadline_seconds" in data:
+            # Duration from "now" (server's clock). Far more robust than
+            # letting the admin's browser compute a wall-clock — drifted
+            # client clocks would otherwise produce a too-short countdown.
+            try:
+                seconds = int(data["deadline_seconds"])
+            except (TypeError, ValueError):
+                return _error("event.deadline_invalid")
+            if seconds <= 0:
+                db.set_event_deadline(event["id"], None)
+            else:
+                from datetime import timedelta, timezone
+                dt = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+                db.set_event_deadline(
+                    event["id"], dt.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        elif "deadline_at" in data:
             deadline = data["deadline_at"]
             # Empty string / null clears the deadline. A non-empty value must
             # parse as ISO-8601; anything else is rejected so the admin sees
