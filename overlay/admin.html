@@ -210,15 +210,25 @@
     }
     .log-list { max-height: 280px; overflow-y: auto; padding: 6px 0; }
     .log-row {
-      display: grid; grid-template-columns: 70px 1fr 80px 80px; gap: 10px;
+      display: grid; grid-template-columns: 70px 1fr 56px 80px 80px; gap: 10px;
       padding: 7px 18px;
       font-size: 12px;
       font-variant-numeric: tabular-nums;
+      align-items: center;
     }
     .log-row .t { color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
     .log-row .s { color: var(--text-primary); font-weight: 600; }
     .log-row .d { color: var(--md3-success); font-weight: 700; text-align: right; }
     .log-row .r { color: var(--text-muted); text-align: right; }
+    .log-row .badge {
+      font-size: 9px; font-weight: 800; letter-spacing: 0.6px;
+      text-transform: uppercase;
+      padding: 2px 6px; border-radius: 4px;
+      text-align: center;
+    }
+    .log-row .badge.direct { background: rgba(255, 215, 0, 0.18); color: #ffd700; }
+    .log-row .badge.assist { background: rgba(92, 208, 255, 0.18); color: #5cd0ff; }
+    .log-row .badge.muted  { opacity: 0.35; }
 
     .field-group { display: flex; flex-direction: column; gap: 14px; }
     .row-2 { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
@@ -362,6 +372,43 @@
               <button class="btn btn-danger btn-block" onclick="resetEvent()"
                       data-i18n="admin.reset">↻ Reset</button>
             </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title" data-i18n="admin.counting">Wertung</h2>
+          <div class="field-group">
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;"
+                 data-i18n="admin.counting_hint">
+              Welche Schadensarten zählen aufs Ziel?
+            </div>
+            <label class="row gap-sm" style="cursor:pointer">
+              <input type="checkbox" id="cnt-direct" onchange="saveCounting()">
+              <span data-i18n="admin.counting.direct">Direkter Schaden</span>
+            </label>
+            <label class="row gap-sm" style="cursor:pointer">
+              <input type="checkbox" id="cnt-assist" onchange="saveCounting()">
+              <span data-i18n="admin.counting.assist">Assist (Spot/Track)</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 class="card-title" data-i18n="admin.deadline">Deadline</h2>
+          <div class="field-group">
+            <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;"
+                 data-i18n="admin.deadline_hint">
+              Zeitfenster bis zum Ziel. Bei Ablauf wird das Event pausiert.
+            </div>
+            <div class="row-2">
+              <input type="datetime-local" id="i-deadline">
+              <button class="btn btn-secondary" onclick="setDeadline()"
+                      data-i18n="admin.set">Setzen</button>
+            </div>
+            <button class="btn btn-secondary btn-block" onclick="clearDeadline()"
+                    data-i18n="admin.deadline_clear">✕ Deadline löschen</button>
+            <div id="deadline-status" style="font-size:12px; color:var(--text-muted);
+                                            font-variant-numeric:tabular-nums;"></div>
           </div>
         </section>
 
@@ -717,6 +764,38 @@
         versusBtn.className = 'btn btn-block ' + (isVersus ? 'btn-primary' : 'btn-secondary');
       }
 
+      // Counting toggles — sync to server state (skip while user is interacting).
+      const cntDirect = document.getElementById('cnt-direct');
+      const cntAssist = document.getElementById('cnt-assist');
+      if (cntDirect && document.activeElement !== cntDirect) {
+        cntDirect.checked = !!event.count_direct;
+      }
+      if (cntAssist && document.activeElement !== cntAssist) {
+        cntAssist.checked = !!event.count_assist;
+      }
+
+      // Deadline input + remaining-time status. Input value is local time.
+      const dlInput = document.getElementById('i-deadline');
+      if (dlInput && document.activeElement !== dlInput) {
+        dlInput.value = isoToLocalInput(event.deadline_at);
+      }
+      const dlStatus = document.getElementById('deadline-status');
+      if (dlStatus) {
+        if (!event.deadline_at) {
+          dlStatus.textContent = i18n.t('admin.deadline_none');
+        } else if (event.expired) {
+          dlStatus.textContent = i18n.t('admin.deadline_expired');
+        } else {
+          const ms = new Date(event.deadline_at).getTime() - Date.now();
+          const s = Math.max(0, Math.floor(ms / 1000));
+          const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+          const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+          const ss = String(s % 60).padStart(2, '0');
+          dlStatus.textContent = i18n.t('admin.deadline_in')
+            .replace('{time}', hh + ':' + mm + ':' + ss);
+        }
+      }
+
       $('ev-url').textContent = event.invite_url || '—';
 
       // Streamers whose team was removed end up with team_id = null. Surface
@@ -864,9 +943,16 @@
             i18n.t('admin.log.empty') +
           '</div>'
         : log.map(function (entry) {
+            const t = entry.type === 'assist' ? 'assist' : 'direct';
+            // Grey out the badge if the corresponding toggle is OFF — the
+            // entry was recorded but doesn't currently count towards the goal.
+            const counts = t === 'direct' ? event.count_direct : event.count_assist;
+            const badgeClass = 'badge ' + t + (counts ? '' : ' muted');
+            const label = i18n.t('admin.log.type_' + t);
             return '<div class="log-row">' +
               '<span class="t">' + entry.t + '</span>' +
               '<span class="s">' + escapeHtml(entry.streamer) + '</span>' +
+              '<span class="' + badgeClass + '">' + label + '</span>' +
               '<span class="d">+' + fmt(entry.damage) + '</span>' +
               '<span class="r">' + fmt(entry.remaining) + '</span>' +
             '</div>';
@@ -1002,6 +1088,49 @@
     function setMode(mode) {
       if (!mode || (latest && latest.event && latest.event.mode === mode)) return;
       return postAction('/api/event/set', { mode: mode }, 'admin.toast.mode_updated');
+    }
+
+    // ── Deadline + Counting helpers ─────────────────────────────────────────
+
+    // Server stores ISO-8601 UTC ("Z"). Input type=datetime-local wants local
+    // wall-clock without TZ. These two helpers bridge between them.
+    function isoToLocalInput(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d)) return '';
+      const pad = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+           + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+    function localInputToIso(local) {
+      if (!local) return null;
+      const d = new Date(local);
+      if (isNaN(d)) return null;
+      return d.toISOString();
+    }
+
+    function saveCounting() {
+      const direct = document.getElementById('cnt-direct').checked;
+      const assist = document.getElementById('cnt-assist').checked;
+      return postAction('/api/event/set',
+                        { counting: { direct: direct, assist: assist } },
+                        'admin.toast.counting_updated');
+    }
+
+    function setDeadline() {
+      const local = document.getElementById('i-deadline').value;
+      const iso = localInputToIso(local);
+      if (!iso) {
+        toast(i18n.t('admin.toast.deadline_invalid'), 'err');
+        return;
+      }
+      return postAction('/api/event/set', { deadline_at: iso },
+                        'admin.toast.deadline_updated');
+    }
+
+    function clearDeadline() {
+      return postAction('/api/event/set', { deadline_at: null },
+                        'admin.toast.deadline_cleared');
     }
 
     function addLiveTeam() {
@@ -1306,6 +1435,7 @@
       onTeamDragOver, onTeamDragLeave, onTeamDrop,
       saveDiscordWebhook, testDiscord, finishEvent, addToObs,
       setMode, addLiveTeam, deleteLiveTeam, renameLiveTeam,
+      saveCounting, setDeadline, clearDeadline,
     });
     window.wizardTeams = wizardTeams;
 

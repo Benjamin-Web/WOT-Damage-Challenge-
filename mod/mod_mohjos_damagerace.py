@@ -168,8 +168,9 @@ _cfg = _load_config()
 _in_battle = [False]
 _outstanding_shots = {}  # vehicle_id -> count of our shots awaiting an HP drop
 _vehicle_hp_cache = {}
-_pending_damage = [0]
-_assist_damage = [0]
+# Damage waiting to be POSTed, grouped by type. Server treats unknown types
+# as 'direct', so this list is also the source of truth for what we send.
+_pending_damage = {'direct': 0, 'assist': 0}
 _feedback_subscribed = [False]
 _send_timer = [None]
 
@@ -212,53 +213,68 @@ def _schedule_send():
 
 def _do_send():
     _send_timer[0] = None
-    damage = _pending_damage[0]
-    if damage <= 0:
+    # Snapshot + drain each non-empty bucket. One POST per type so the server
+    # can keep direct/assist totals separate.
+    to_send = []
+    for dmg_type in ('direct', 'assist'):
+        amount = _pending_damage.get(dmg_type, 0)
+        if amount > 0:
+            _pending_damage[dmg_type] = 0
+            to_send.append((dmg_type, amount))
+    if not to_send:
         return
-    _pending_damage[0] = 0
 
     try:
         url = _cfg['server_url'].rstrip('/') + '/damage'
-        key = str(uuid.uuid4())
         token = _cfg.get('streamer_token') or _cfg.get('streamer_name') or ''
-        payload = json.dumps({
-            'streamer_token': token,
-            'damage':         damage,
-            'key':            key,
-        })
     except Exception as exc:
         _log_error('payload build failed: %s' % exc)
         return
 
-    def _worker():
-        try:
-            req = urllib2.Request(
-                url,
-                data=payload,
-                headers={'Content-Type': 'application/json'},
-            )
-            resp = urllib2.urlopen(req, timeout=5)
-            body = resp.read()
-            _file_log('TRACE', 'urllib2 status=%s body=%r'
-                      % (resp.getcode(), body[:200]))
-            _log_info('Posted damage=%d' % damage)
-        except Exception as exc:
-            _file_log('ERROR', 'urllib2 POST failed: %s' % exc)
-            # Re-queue on the main thread.
-            def _requeue():
-                _pending_damage[0] += damage
+    def _post_one(dmg_type, amount):
+        key = str(uuid.uuid4())
+        payload = json.dumps({
+            'streamer_token': token,
+            'damage':         amount,
+            'type':           dmg_type,
+            'key':            key,
+        })
+
+        def _worker():
+            try:
+                req = urllib2.Request(
+                    url,
+                    data=payload,
+                    headers={'Content-Type': 'application/json'},
+                )
+                resp = urllib2.urlopen(req, timeout=5)
+                body = resp.read()
+                _file_log('TRACE',
+                          'urllib2 status=%s type=%s body=%r'
+                          % (resp.getcode(), dmg_type, body[:200]))
+                _log_info('Posted type=%s damage=%d' % (dmg_type, amount))
+            except Exception as exc:
+                _file_log('ERROR', 'urllib2 POST failed (%s): %s'
+                          % (dmg_type, exc))
+                # Re-queue on the main thread into the same bucket.
+                def _requeue():
+                    _pending_damage[dmg_type] = (
+                        _pending_damage.get(dmg_type, 0) + amount)
+                    try:
+                        BigWorld.callback(5.0, _do_send)
+                    except Exception:
+                        pass
                 try:
-                    BigWorld.callback(5.0, _do_send)
+                    BigWorld.callback(0.0, _requeue)
                 except Exception:
                     pass
-            try:
-                BigWorld.callback(0.0, _requeue)
-            except Exception:
-                pass
 
-    t = threading.Thread(target=_worker)
-    t.daemon = True
-    t.start()
+        t = threading.Thread(target=_worker)
+        t.daemon = True
+        t.start()
+
+    for dmg_type, amount in to_send:
+        _post_one(dmg_type, amount)
 
 
 # ---------------------------------------------------------------------------
@@ -292,9 +308,11 @@ def _on_player_feedback(events):
             except Exception:
                 damage = 0
             if damage > 0:
-                _assist_damage[0] += damage
-                _file_log('INFO', 'Assist damage += %d (total=%d)'
-                          % (damage, _assist_damage[0]))
+                _pending_damage['assist'] = (
+                    _pending_damage.get('assist', 0) + damage)
+                _file_log('INFO', 'Assist damage += %d (pending=%d)'
+                          % (damage, _pending_damage['assist']))
+                _schedule_send()
     except Exception as exc:
         _log_warning('feedback handler error: %s' % exc)
 
@@ -435,18 +453,15 @@ def _install_player_avatar_hooks():
                     _in_battle[0] = True
                     _vehicle_hp_cache.clear()
                     _outstanding_shots.clear()
-                    _assist_damage[0] = 0
+                    for _k in _pending_damage:
+                        _pending_damage[_k] = 0
                     _subscribe_feedback()
                     _log_info('Battle started -- DamageRace active (token=%s...).'
                               % (_cfg.get('streamer_token', '') or '')[:8])
                 elif period >= _ARENA_PERIOD_AFTERBATTLE:
                     _in_battle[0] = False
-                    assist = _assist_damage[0]
-                    _assist_damage[0] = 0
-                    if assist > 0:
-                        _pending_damage[0] += assist
-                        _log_info('Battle ended -- adding assist=%d' % assist)
-                    if _pending_damage[0] > 0:
+                    # Flush any leftover direct/assist damage as separate POSTs.
+                    if any(v > 0 for v in _pending_damage.values()):
                         _do_send()
                     _unsubscribe_feedback()
                     _log_info('Battle ended.')
@@ -501,8 +516,9 @@ def _install_vehicle_hooks():
                     _log_warning('Clamped implausible damage: %d -> %d'
                                  % (damage, cap))
                     damage = cap
-                _pending_damage[0] += damage
-                _file_log('INFO', 'Recorded damage=%d on target=%s'
+                _pending_damage['direct'] = (
+                    _pending_damage.get('direct', 0) + damage)
+                _file_log('INFO', 'Recorded direct damage=%d on target=%s'
                           % (damage, self.id))
                 _schedule_send()
             except Exception as exc:

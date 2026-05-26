@@ -165,11 +165,44 @@ class Database:
             for ddl in (
                 "ALTER TABLE events ADD COLUMN discord_webhook TEXT",
                 "ALTER TABLE events ADD COLUMN recap_posted_at TEXT",
+                # Per-type damage breakdown + counting toggles + optional deadline.
+                "ALTER TABLE event_log ADD COLUMN type TEXT NOT NULL DEFAULT 'direct'",
+                "ALTER TABLE streamers ADD COLUMN damage_direct INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE streamers ADD COLUMN damage_assist INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE teams     ADD COLUMN damage_direct INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE teams     ADD COLUMN damage_assist INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE events    ADD COLUMN total_direct  INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE events    ADD COLUMN total_assist  INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE events    ADD COLUMN count_direct  INTEGER NOT NULL DEFAULT 1",
+                "ALTER TABLE events    ADD COLUMN count_assist  INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE events    ADD COLUMN deadline_at   TEXT",
             ):
                 try:
                     c.execute(ddl)
                 except sqlite3.OperationalError:
                     pass
+
+            # One-off backfill: copy the legacy `damage` / `total_dealt` aggregates
+            # into the new `*_direct` columns so existing live events keep the same
+            # `remaining` after the migration. Idempotent — running it again on
+            # already-migrated rows is a no-op because the WHERE clause matches
+            # only rows where the new column is still 0 but the legacy total is
+            # not.
+            try:
+                c.execute(
+                    "UPDATE streamers SET damage_direct = damage "
+                    "WHERE damage_direct = 0 AND damage > 0"
+                )
+                c.execute(
+                    "UPDATE teams SET damage_direct = damage "
+                    "WHERE damage_direct = 0 AND damage > 0"
+                )
+                c.execute(
+                    "UPDATE events SET total_direct = total_dealt "
+                    "WHERE total_direct = 0 AND total_dealt > 0"
+                )
+            except sqlite3.OperationalError:
+                pass
 
     # ── Users ─────────────────────────────────────────────────────────────────
 
@@ -350,19 +383,57 @@ class Database:
         with self._lock, self._conn() as c:
             if new_goal is not None:
                 c.execute(
-                    "UPDATE events SET total_dealt = 0, paused = 0, goal = ? "
-                    "WHERE id = ?",
+                    "UPDATE events SET total_dealt = 0, total_direct = 0, "
+                    "total_assist = 0, paused = 0, goal = ? WHERE id = ?",
                     (float(new_goal), event_id),
                 )
             else:
                 c.execute(
-                    "UPDATE events SET total_dealt = 0, paused = 0 WHERE id = ?",
+                    "UPDATE events SET total_dealt = 0, total_direct = 0, "
+                    "total_assist = 0, paused = 0 WHERE id = ?",
                     (event_id,),
                 )
-            c.execute("UPDATE teams     SET damage = 0 WHERE event_id = ?", (event_id,))
-            c.execute("UPDATE streamers SET damage = 0, last_seen = NULL "
+            c.execute("UPDATE teams SET damage = 0, damage_direct = 0, "
+                      "damage_assist = 0 WHERE event_id = ?", (event_id,))
+            c.execute("UPDATE streamers SET damage = 0, damage_direct = 0, "
+                      "damage_assist = 0, last_seen = NULL "
                       "WHERE event_id = ?", (event_id,))
             c.execute("DELETE FROM event_log WHERE event_id = ?", (event_id,))
+
+    def set_event_counting(self, event_id: int, count_direct: bool,
+                           count_assist: bool) -> None:
+        """Persist the 'what counts towards the goal' toggles and recompute
+        the cached `damage`/`total_dealt` aggregates from the per-type
+        columns. Pure-SQL — no row-by-row iteration needed."""
+        cd = 1 if count_direct else 0
+        ca = 1 if count_assist else 0
+        with self._lock, self._conn() as c:
+            c.execute(
+                "UPDATE events SET count_direct = ?, count_assist = ? "
+                "WHERE id = ?", (cd, ca, event_id),
+            )
+            c.execute(
+                "UPDATE events SET total_dealt = "
+                "total_direct * ? + total_assist * ? WHERE id = ?",
+                (cd, ca, event_id),
+            )
+            c.execute(
+                "UPDATE teams SET damage = "
+                "damage_direct * ? + damage_assist * ? WHERE event_id = ?",
+                (cd, ca, event_id),
+            )
+            c.execute(
+                "UPDATE streamers SET damage = "
+                "damage_direct * ? + damage_assist * ? WHERE event_id = ?",
+                (cd, ca, event_id),
+            )
+
+    def set_event_deadline(self, event_id: int,
+                           deadline_at: str | None) -> None:
+        """Set or clear the event deadline (ISO-8601). `None` removes it."""
+        with self._lock, self._conn() as c:
+            c.execute("UPDATE events SET deadline_at = ? WHERE id = ?",
+                      (deadline_at, event_id))
 
     def set_event_mode(self, event_id: int, mode: str) -> None:
         """Switch coop ↔ versus in-place. Streamer tokens and team rows
@@ -643,13 +714,20 @@ class Database:
     # ── Damage ────────────────────────────────────────────────────────────────
 
     def record_damage(self, streamer_token: str, damage: int,
-                      key: str | None = None) -> tuple[bool, int]:
+                      key: str | None = None,
+                      dmg_type: str = "direct") -> tuple[bool, int]:
         damage = int(damage)
         if damage <= 0:
             return False, 0
         if damage > MAX_DAMAGE_PER_REQUEST:
             log.warning("Clamped implausible damage value: %d", damage)
             damage = MAX_DAMAGE_PER_REQUEST
+        if dmg_type not in ("direct", "assist"):
+            dmg_type = "direct"
+        # SQL column names are derived from the validated literal — no
+        # injection vector even though we interpolate into the statement.
+        type_col_user = f"damage_{dmg_type}"
+        type_col_event = f"total_{dmg_type}"
 
         with self._lock, self._conn() as c:
             now = time.time()
@@ -675,30 +753,64 @@ class Database:
             ).fetchone()
             if not event:
                 return False, 0
+            current_remaining = max(0, int(event["goal"] - event["total_dealt"]))
             if event["paused"]:
-                return False, max(0, int(event["goal"] - event["total_dealt"]))
+                return False, current_remaining
+            if event["deadline_at"] and _now_iso() > event["deadline_at"]:
+                # Deadline expired — silently accept the POST so the mod doesn't
+                # retry, but don't credit the damage. Treat similar to "paused".
+                return False, current_remaining
 
-            new_total = event["total_dealt"] + damage
-            c.execute("UPDATE events SET total_dealt = ? WHERE id = ?",
-                      (new_total, event["id"]))
+            cd = int(event["count_direct"])
+            ca = int(event["count_assist"])
+
+            # Bump the per-type raw aggregate, then recompute the cached
+            # "counted" total using the current toggles. Two statements per
+            # level: one increments raw, one recomputes the cache.
             c.execute(
-                "UPDATE streamers SET damage = damage + ?, last_seen = ? "
-                "WHERE token = ?",
+                f"UPDATE streamers SET {type_col_user} = {type_col_user} + ?, "
+                "last_seen = ? WHERE token = ?",
                 (damage, _now_iso(), streamer_token),
+            )
+            c.execute(
+                "UPDATE streamers SET damage = "
+                "damage_direct * ? + damage_assist * ? WHERE token = ?",
+                (cd, ca, streamer_token),
             )
             if streamer["team_id"]:
                 c.execute(
-                    "UPDATE teams SET damage = damage + ? WHERE id = ?",
+                    f"UPDATE teams SET {type_col_user} = {type_col_user} + ? "
+                    "WHERE id = ?",
                     (damage, streamer["team_id"]),
                 )
+                c.execute(
+                    "UPDATE teams SET damage = "
+                    "damage_direct * ? + damage_assist * ? WHERE id = ?",
+                    (cd, ca, streamer["team_id"]),
+                )
+            c.execute(
+                f"UPDATE events SET {type_col_event} = {type_col_event} + ? "
+                "WHERE id = ?",
+                (damage, event["id"]),
+            )
+            c.execute(
+                "UPDATE events SET total_dealt = "
+                "total_direct * ? + total_assist * ? WHERE id = ?",
+                (cd, ca, event["id"]),
+            )
+            new_total = c.execute(
+                "SELECT total_dealt FROM events WHERE id = ?", (event["id"],),
+            ).fetchone()["total_dealt"]
             remaining = max(0, int(event["goal"] - new_total))
             c.execute(
                 """
-                INSERT INTO event_log (event_id, t, wot_name, team_id, damage, remaining)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO event_log (event_id, t, wot_name, team_id,
+                                       damage, remaining, type)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (event["id"], datetime.now().strftime("%H:%M:%S"),
-                 streamer["wot_name"], streamer["team_id"], damage, remaining),
+                 streamer["wot_name"], streamer["team_id"], damage, remaining,
+                 dmg_type),
             )
             c.execute(
                 """
@@ -746,23 +858,27 @@ class Database:
         for team in teams:
             members = [s["wot_name"] for s in streamers if s["team_id"] == team["id"]]
             teams_out.append({
-                "id":           team["id"],
-                "name":         team["name"],
-                "color":        team["color"],
-                "damage":       int(team["damage"]),
-                "invite_token": team["invite_token"],
-                "invite_url":   f"{base}/join/{team['invite_token']}" if base else None,
-                "members":      members,
+                "id":            team["id"],
+                "name":          team["name"],
+                "color":         team["color"],
+                "damage":        int(team["damage"]),
+                "damage_direct": int(team["damage_direct"]),
+                "damage_assist": int(team["damage_assist"]),
+                "invite_token":  team["invite_token"],
+                "invite_url":    f"{base}/join/{team['invite_token']}" if base else None,
+                "members":       members,
             })
 
         streamers_map: dict[str, dict] = {}
         for streamer in streamers:
             streamers_map[streamer["wot_name"]] = {
-                "token":     streamer["token"],
-                "team_id":   streamer["team_id"],
-                "damage":    int(streamer["damage"]),
-                "last_seen": streamer["last_seen"],
-                "active":    bool(streamer["active"]),
+                "token":         streamer["token"],
+                "team_id":       streamer["team_id"],
+                "damage":        int(streamer["damage"]),
+                "damage_direct": int(streamer["damage_direct"]),
+                "damage_assist": int(streamer["damage_assist"]),
+                "last_seen":     streamer["last_seen"],
+                "active":        bool(streamer["active"]),
             }
 
         log_out = []
@@ -770,6 +886,9 @@ class Database:
             row = dict(entry)
             row["streamer"] = row["wot_name"]  # backward-compatible alias
             log_out.append(row)
+
+        deadline_at = event["deadline_at"]
+        expired = bool(deadline_at and _now_iso() > deadline_at)
 
         return {
             "event": {
@@ -780,6 +899,12 @@ class Database:
                 "mode":         event["mode"],
                 "paused":       bool(event["paused"]),
                 "total_dealt":  int(event["total_dealt"]),
+                "total_direct": int(event["total_direct"]),
+                "total_assist": int(event["total_assist"]),
+                "count_direct": bool(event["count_direct"]),
+                "count_assist": bool(event["count_assist"]),
+                "deadline_at":  deadline_at,
+                "expired":      expired,
                 "remaining":    max(0, int(event["goal"] - event["total_dealt"])),
                 "invite_token": event["event_invite_token"],
                 "invite_url":   f"{base}/join/{event['event_invite_token']}" if base else None,

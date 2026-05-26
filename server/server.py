@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from datetime import datetime
 from typing import Any, Callable
 
 from flask import (
@@ -272,12 +273,14 @@ def post_damage():
         token = payload.get("streamer_token") or payload.get("token") or payload.get("streamer")
         raw_damage = payload.get("damage", 0)
         key = payload.get("key")
+        dmg_type = payload.get("type") or "direct"
     else:
         token = (request.args.get("streamer_token")
                  or request.args.get("token")
                  or request.args.get("streamer"))
         raw_damage = request.args.get("damage", 0)
         key = request.args.get("key")
+        dmg_type = request.args.get("type") or "direct"
 
     if not token:
         return _error("damage.token_required")
@@ -288,7 +291,10 @@ def post_damage():
     if damage <= 0:
         return _error("damage.must_be_positive")
 
-    ok, remaining = db.record_damage(token, damage, key=key)
+    ok, remaining = db.record_damage(token, damage, key=key, dmg_type=dmg_type)
+    # Token unknown / streamer disabled: 404 so the mod stops hammering.
+    # Paused / deadline-expired / over-goal: ok=False but remaining>=0 —
+    # acknowledge with 200 so the mod does NOT retry. Caller sees ok=False.
     if not ok and remaining == 0:
         return _error("damage.streamer_unknown", status=404)
     return jsonify({"ok": ok, "remaining": remaining})
@@ -396,6 +402,25 @@ def api_event_set():
             if mode not in VALID_MODES:
                 return _error("event.mode_invalid")
             db.set_event_mode(event["id"], mode)
+        if "counting" in data and isinstance(data["counting"], dict):
+            db.set_event_counting(
+                event["id"],
+                count_direct=bool(data["counting"].get("direct", True)),
+                count_assist=bool(data["counting"].get("assist", False)),
+            )
+        if "deadline_at" in data:
+            deadline = data["deadline_at"]
+            # Empty string / null clears the deadline. A non-empty value must
+            # parse as ISO-8601; anything else is rejected so the admin sees
+            # the error rather than silently losing the input.
+            if deadline in (None, "", "null"):
+                db.set_event_deadline(event["id"], None)
+            else:
+                try:
+                    datetime.fromisoformat(str(deadline).replace("Z", "+00:00"))
+                except (TypeError, ValueError):
+                    return _error("event.deadline_invalid")
+                db.set_event_deadline(event["id"], str(deadline))
     return jsonify({"ok": True, **db.get_event_state(event["id"], base_url=_base_url())})
 
 

@@ -38,6 +38,8 @@ _MESSAGES: dict[str, dict[str, str]] = {
                                "en": "Between 2 and 4 teams are required."},
     "event.name_invalid":     {"de": "Event-Name darf nicht leer sein.",
                                "en": "Event name must not be empty."},
+    "event.deadline_invalid": {"de": "Deadline ist ungueltig (ISO-8601 erwartet).",
+                               "en": "Deadline is invalid (ISO-8601 expected)."},
 
     "invite.invalid":         {"de": "Einladungslink ungueltig.",
                                "en": "Invitation link is invalid."},
