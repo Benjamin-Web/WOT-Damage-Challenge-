@@ -144,6 +144,12 @@ Das Asset muss exakt `DamageRace.exe` heißen — der Auto-Updater sucht danach.
 
 ---
 
+## Datenschutz & Netzwerk
+
+Der WoT-Mod sendet während eines Events **nur deinen eigenen Schaden** (Direkt + Assist) per HTTPS an den Event-Server — keine Gegnerdaten, keine Account-Daten. Übertragung ist freiwillig (nur mit Token) und per `"enabled": false` abschaltbar. Volle Offenlegung: **[PRIVACY.md](PRIVACY.md)**.
+
+---
+
 <div align="center">
 
 Made by **Mohjo_beist** · Twitch Streamer Community Project

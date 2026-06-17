@@ -57,6 +57,10 @@ _MOD_NAME = 'DamageRace'
 _DEBUG_LOG = os.path.join(tempfile.gettempdir(), 'damagerace_debug.log')
 
 
+# Maps our level strings onto BigWorld's per-level log methods.
+_BW_LOG_METHODS = {'INFO': 'logInfo', 'WARN': 'logWarning', 'ERROR': 'logError'}
+
+
 def _file_log(level, message):
     try:
         with open(_DEBUG_LOG, 'a') as fh:
@@ -65,28 +69,28 @@ def _file_log(level, message):
         pass
 
 
-def _log_info(message):
-    _file_log('INFO', message)
+def _log(level, message):
+    """Mirror a message to the temp debug log and WoT's engine log."""
+    _file_log(level, message)
+    bw_method = getattr(BigWorld, _BW_LOG_METHODS[level], None)
+    if bw_method is None:
+        return
     try:
-        BigWorld.logInfo(_MOD_NAME, message, None)
+        bw_method(_MOD_NAME, message, None)
     except Exception:
         pass
+
+
+def _log_info(message):
+    _log('INFO', message)
 
 
 def _log_warning(message):
-    _file_log('WARN', message)
-    try:
-        BigWorld.logWarning(_MOD_NAME, message, None)
-    except Exception:
-        pass
+    _log('WARN', message)
 
 
 def _log_error(message):
-    _file_log('ERROR', message)
-    try:
-        BigWorld.logError(_MOD_NAME, message, None)
-    except Exception:
-        pass
+    _log('ERROR', message)
 
 
 _file_log('INFO', 'Module imported. Python=%s BigWorld=%s Avatar=%s Vehicle=%s'
@@ -168,9 +172,11 @@ _cfg = _load_config()
 _in_battle = [False]
 _outstanding_shots = {}  # vehicle_id -> count of our shots awaiting an HP drop
 _vehicle_hp_cache = {}
+# Damage types we track and POST -- single source of truth for the bucket set.
+_DAMAGE_TYPES = ('direct', 'assist')
 # Damage waiting to be POSTed, grouped by type. Server treats unknown types
-# as 'direct', so this list is also the source of truth for what we send.
-_pending_damage = {'direct': 0, 'assist': 0}
+# as 'direct'.
+_pending_damage = {t: 0 for t in _DAMAGE_TYPES}
 _feedback_subscribed = [False]
 _send_timer = [None]
 
@@ -216,7 +222,7 @@ def _do_send():
     # Snapshot + drain each non-empty bucket. One POST per type so the server
     # can keep direct/assist totals separate.
     to_send = []
-    for dmg_type in ('direct', 'assist'):
+    for dmg_type in _DAMAGE_TYPES:
         amount = _pending_damage.get(dmg_type, 0)
         if amount > 0:
             _pending_damage[dmg_type] = 0
