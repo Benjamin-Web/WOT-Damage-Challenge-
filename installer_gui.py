@@ -69,7 +69,7 @@ FONT_FAM = "Inter"
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 
 DEFAULT_SERVER_URL = "https://mohjos-damagerace.duckdns.org"
 SETTINGS_FILE = "damagerace_settings.json"
